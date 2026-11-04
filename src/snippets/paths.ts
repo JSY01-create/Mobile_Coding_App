@@ -47,7 +47,16 @@ export const pathSource: CompletionSource = (ctx) => {
   const current = workspace.current();
   const fromDir = dirname(current);
   // Files that fit the tag come first: stylesheets for <link>, scripts for <script>, pages for <a>.
-  const want = /<link\b/i.test(before) ? /\.css$/i : /<script\b/i.test(before) ? /\.[mc]?[jt]sx?$/i : /<a\b/i.test(before) ? /\.html?$/i : null;
+  const images = /\.(png|jpe?g|gif|webp|svg|avif|ico|bmp)$/i;
+  const want = /<link\b/i.test(before)
+    ? /\.css$/i
+    : /<script\b/i.test(before)
+      ? /\.[mc]?[jt]sx?$/i
+      : /<(img|source|video|picture)\b|url\(/i.test(before)
+        ? images
+        : /<a\b/i.test(before)
+          ? /\.html?$/i
+          : null;
   const options: Completion[] = [];
   for (const path of workspace.files()) {
     if (path === current) continue;

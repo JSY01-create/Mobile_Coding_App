@@ -52,8 +52,10 @@ Explorer in VS Code. Tap a folder to open or close it.
   folders as you go.
 - The ... next to a file or folder renames, moves, duplicates,
   saves or deletes it. Renaming to a new path moves it.
-- Open single files or a whole project as a .zip, and save any
-  folder as a .zip.
+- Add images and other files from your phone into any folder,
+  or a whole project as a .zip. Save any folder as a .zip.
+- In the Android app, projects can live in Documents/Thumbcode.
+  Files you put there with the Files or Gallery app show up here.
 - In \`href="\`, \`src="\`, \`import "./\` and CSS \`url(\`, you get
   suggestions for the files in your project.
 

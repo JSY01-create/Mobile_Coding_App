@@ -816,6 +816,8 @@ button:focus-visible,
   color: var(--text);
 }
 
+.badge[data-ext="img"] { background: #1f4d3a; color: #7ee2b0; }
+
 .badge.small {
   width: 30px;
   height: 20px;
@@ -937,6 +939,74 @@ button:focus-visible,
   width: 34px;
   height: 34px;
   color: var(--text-faint);
+}
+
+.drawer-foot-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.drawer-foot-wrap .drawer-foot,
+.drawer-tip {
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+.drawer-foot-wrap .drawer-foot {
+  color: var(--text-dim);
+}
+
+.drawer-foot-wrap .btn {
+  margin-top: 8px;
+}
+
+/* Image preview */
+.preview-frame {
+  display: grid;
+  place-items: center;
+  margin: 4px 10px 8px;
+  padding: 10px;
+  border-radius: 12px;
+  min-height: 120px;
+  /* Checkerboard shows transparent parts of the image. */
+  background: repeating-conic-gradient(#2c2c2e 0% 25%, #3a3a3c 0% 50%) 50% / 20px 20px;
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 46vh;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.preview-path {
+  margin: 0 10px 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.storage-offer {
+  padding: 0 10px 10px;
+}
+
+.storage-offer p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+  color: #d1d1d6;
+}
+
+.set-value {
+  flex: none;
+  font-family: var(--font-code);
+  font-size: 13px;
+  color: var(--text-dim);
 }
 
 .drawer-foot {

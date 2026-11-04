@@ -1,6 +1,6 @@
 // The file tree (like VS Code's Explorer): folders, files, and everything you can do with them.
 import { strToU8, unzipSync, zipSync } from "fflate";
-import type { FileRec, FileStore } from "../files";
+import { IMAGE_EXT, isBinaryName, type FileRec, type FileStore } from "../files";
 import { extTag, languageFor, PLAIN } from "../languages";
 import { isNative, nativeShareBytes, nativeShareFile } from "../native";
 import { ancestors, basename, dirname, isInside, joinPath, normalizePath, pathProblem, splitExt } from "../paths";
@@ -8,7 +8,16 @@ import { h, icon, icons } from "./dom";
 import { menuList, type Handle, type Overlays } from "./overlay";
 
 export interface ExplorerHost {
-  files: FileStore;
+  readonly files: FileStore;
+  /** Where files are kept, e.g. "Documents/Thumbcode". */
+  storageLabel(): string;
+  /** True when the files are in the phone's shared storage. */
+  storageShared(): boolean;
+  /** Offers to move files to Documents/Thumbcode (Android only). */
+  canUsePhoneStorage(): boolean;
+  usePhoneStorage(): Promise<void>;
+  /** Re-reads the folder to pick up files other apps added. */
+  refresh(): Promise<void>;
   overlays: Overlays;
   currentId(): string;
   /** Saves the open file's text into the store right away. */
@@ -73,14 +82,32 @@ export class Explorer {
           tool("New folder", icons.folderPlus, () => this.closeThen(() => this.newFolder(this.selected))),
           tool("Open files or a .zip from your phone", icons.upload, () => this.closeThen(() => this.input.click())),
           tool("Save everything as a .zip", icons.zip, () => this.closeThen(() => this.saveZip(""))),
+          tool("Refresh", icons.refresh, () => void this.host.refresh().then(() => this.render()))
         )
       ),
       this.tree,
-      h("p.drawer-foot", {}, "New files go into the highlighted folder. Type a path like src/app.js to make folders as you go.")
+      this.footer()
     );
     this.drawer = this.host.overlays.drawer(body, "Files");
     this.render();
     this.tree.querySelector(".tree-row.active")?.scrollIntoView({ block: "nearest" });
+  }
+
+  private footer(): HTMLElement {
+    const where = h("p.drawer-foot", {}, `Saved in ${this.host.storageLabel()}.`);
+    if (this.host.storageShared()) {
+      where.append(" Other apps, like Files and Gallery, can add files there too.");
+    } else if (this.host.canUsePhoneStorage()) {
+      const btn = h("button.btn.small.primary", { type: "button" }, "Use phone storage");
+      btn.addEventListener("click", () => this.closeThen(() => void this.host.usePhoneStorage()));
+      where.append(" Keep projects in Documents/Thumbcode so you can add images with other apps.", h("br"), btn);
+    }
+    return h("div.drawer-foot-wrap", {}, h("p.drawer-tip", {}, "New files go into the highlighted folder. Type a path like src/app.js to make folders as you go."), where);
+  }
+
+  /** Re-draws the tree if the panel is open (after files change elsewhere). */
+  update(): void {
+    this.render();
   }
 
   private closeThen(fn: () => void): void {
@@ -120,7 +147,7 @@ export class Explorer {
         if (open) walk(folder, depth + 1);
       }
       for (const file of childFiles(parent)) {
-        const tag = extTag(file.name);
+        const tag = IMAGE_EXT.test(file.name) && file.binary ? "img" : extTag(file.name);
         const row = h(
           `button.tree-row.file${file.id === current ? ".active" : ""}` as "button",
           { type: "button", role: "treeitem", style: `--depth: ${depth}` },
@@ -130,7 +157,7 @@ export class Explorer {
         );
         row.addEventListener("click", () => {
           this.selected = dirname(file.name);
-          this.closeThen(() => this.host.openFile(file.id));
+          this.closeThen(() => (file.binary ? void this.preview(file) : this.host.openFile(file.id)));
         });
         rows.push(this.item(row, () => this.closeThen(() => this.fileActions(file)), `Actions for ${basename(file.name)}`));
       }
@@ -235,10 +262,6 @@ export class Explorer {
   }
 
   async deleteFile(file: FileRec): Promise<void> {
-    if (this.files.files.length <= 1) {
-      this.host.toast("You need at least one file.");
-      return;
-    }
     const ok = await this.host.overlays.confirm({
       title: `Delete ${basename(file.name)}?`,
       message: "It is removed from this device. This can't be undone.",
@@ -279,6 +302,47 @@ export class Explorer {
 
   // ---- Menus ---------------------------------------------------------------------
 
+  /** Shows an image (or details for other non-text files) with its actions. */
+  async preview(file: FileRec): Promise<void> {
+    const body = h("div.preview");
+    const info = h("p.sheet-note", {}, `${dirname(file.name) ? dirname(file.name) + "/ · " : ""}${formatSize(file.size)}`);
+    let url = "";
+    if (IMAGE_EXT.test(file.name)) {
+      const img = h("img.preview-img", { alt: basename(file.name) });
+      body.append(h("div.preview-frame", {}, img));
+      try {
+        const bytes = await this.files.readBytes(file);
+        url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mimeFor(file.name) }));
+        img.src = url;
+        img.addEventListener("load", () => info.append(` · ${img.naturalWidth} × ${img.naturalHeight} px`), { once: true });
+      } catch {
+        body.replaceChildren(h("p.empty", {}, "This image couldn't be read."));
+      }
+    } else {
+      body.append(h("p.empty", {}, "Thumbcode can't show this kind of file, but you can move, share or delete it."));
+    }
+    const path = h("p.preview-path", {}, `Its path is ${file.name}. In src="" and url(), suggestions fill in the right path for you.`);
+    const sheet = this.host.overlays.sheet({
+      title: basename(file.name),
+      className: "tall",
+      onClose: () => url && URL.revokeObjectURL(url),
+      body: h(
+        "div",
+        {},
+        info,
+        body,
+        IMAGE_EXT.test(file.name) ? path : null,
+        menuList([
+          { label: "Rename or move", icon: icons.pencil, run: () => { sheet.close(); void this.renameFile(file); } },
+          { label: "Duplicate", icon: icons.copy, run: () => { sheet.close(); this.files.duplicate(file.id); } },
+          { label: "Save to device", icon: icons.download, run: () => { sheet.close(); void this.exportFile(file); } },
+          null,
+          { label: "Delete", icon: icons.trash, danger: true, run: () => { sheet.close(); void this.deleteFile(file); } },
+        ])
+      ),
+    });
+  }
+
   fileActions(file: FileRec): void {
     const lang = languageFor(file)?.name ?? PLAIN;
     const sheet = this.host.overlays.sheet({
@@ -305,7 +369,7 @@ export class Explorer {
       body: menuList([
         { label: `New file in ${name}`, icon: icons.filePlus, run: () => { sheet.close(); void this.newFile(folder); } },
         { label: `New folder in ${name}`, icon: icons.folderPlus, run: () => { sheet.close(); void this.newFolder(folder); } },
-        { label: `Open files into ${name}`, icon: icons.upload, run: () => { sheet.close(); this.selected = folder; this.input.click(); } },
+        { label: `Add files to ${name}`, icon: icons.upload, run: () => { sheet.close(); this.selected = folder; this.input.click(); } },
         { label: "Rename or move", icon: icons.pencil, run: () => { sheet.close(); void this.renameFolder(folder); } },
         { label: "Save folder as .zip", icon: icons.zip, run: () => { sheet.close(); void this.saveZip(folder); } },
         null,
@@ -326,6 +390,7 @@ export class Explorer {
     const into = this.selected;
     const current = this.host.currentId();
     let first: FileRec | null = null;
+    let firstOther: FileRec | null = null;
     let added = 0;
     let skipped = 0;
     for (const f of picked) {
@@ -340,20 +405,19 @@ export class Explorer {
         first ??= res.first;
         continue;
       }
-      const text = await f.text();
-      if (looksBinary(text)) {
-        skipped++;
-        continue;
-      }
-      const file = this.files.create(joinPath(into, f.name), text);
-      first ??= file;
+      const path = joinPath(into, f.name);
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const text = isBinaryName(f.name) ? null : decodeText(bytes);
+      const file = text === null ? this.files.addBytes(path, bytes) : this.files.create(path, text);
+      if (text !== null) first ??= file;
+      else firstOther ??= file;
       added++;
     }
     this.files.setActive(current);
     if (first) this.host.openFile(first.id);
-    const note = skipped ? ` (${skipped} non-text ${skipped === 1 ? "file" : "files"} skipped)` : "";
-    if (added) this.host.toast(`Opened ${added} ${added === 1 ? "file" : "files"}${note}`, 2600);
-    else if (skipped) this.host.toast("Only text files can be opened.", 2600);
+    else if (firstOther && picked.length === 1) void this.preview(firstOther);
+    if (added) this.host.toast(`Added ${added} ${added === 1 ? "file" : "files"}${into ? ` to ${basename(into)}` : ""}`, 2600);
+    else if (skipped) this.host.toast("Nothing could be added.", 2600);
   }
 
   private importZip(data: Uint8Array, into: string): { added: number; skipped: number; first: FileRec | null } {
@@ -374,38 +438,35 @@ export class Explorer {
         if (path && !this.files.isFolder(path)) this.files.createFolder(path);
         continue;
       }
-      let text: string;
-      try {
-        text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      } catch {
+      if (pathProblem(path)) {
         skipped++;
         continue;
       }
-      if (looksBinary(text) || pathProblem(path)) {
-        skipped++;
-        continue;
-      }
+      const text = isBinaryName(name) ? null : decodeText(bytes);
       // A name that is taken gets a number (index-2.html), so nothing is overwritten.
-      const file = this.files.create(path, text);
-      first ??= file;
+      const file = text === null ? this.files.addBytes(path, bytes) : this.files.create(path, text);
+      if (text !== null) first ??= file;
       added++;
     }
-    this.files.persist();
     return { added, skipped, first };
   }
 
   async exportFile(file: FileRec): Promise<void> {
     if (file.id === this.host.currentId()) this.host.flushSave();
     const name = basename(file.name);
-    if (isNative) {
-      try {
-        await nativeShareFile(name, file.content);
-      } catch {
-        this.host.toast(`Couldn't save ${name}.`);
+    try {
+      if (file.binary) {
+        const bytes = await this.files.readBytes(file);
+        if (isNative) await nativeShareBytes(name, bytes);
+        else await webSave(new Blob([bytes as BlobPart], { type: mimeFor(name) }), name, mimeFor(name));
+        return;
       }
-      return;
+      const text = (await this.files.ensureContent(file.id))?.content ?? "";
+      if (isNative) await nativeShareFile(name, text);
+      else await webSave(new Blob([text], { type: "text/plain" }), name, "text/plain");
+    } catch {
+      this.host.toast(`Couldn't save ${name}.`);
     }
-    await webSave(new Blob([file.content], { type: "text/plain" }), name, "text/plain");
   }
 
   /** Saves a folder (or everything, for "") as a .zip. */
@@ -419,7 +480,15 @@ export class Explorer {
     // Keep the folder itself in the zip, e.g. website/index.html.
     const strip = folder ? dirname(folder) : "";
     const entries: Record<string, Uint8Array> = {};
-    for (const f of list) entries[strip ? f.name.slice(strip.length + 1) : f.name] = strToU8(f.content);
+    await this.files.flush();
+    for (const f of list) {
+      const key = strip ? f.name.slice(strip.length + 1) : f.name;
+      try {
+        entries[key] = f.binary ? await this.files.readBytes(f) : strToU8((await this.files.ensureContent(f.id))?.content ?? "");
+      } catch {
+        this.host.toast(`Skipped ${basename(f.name)}: it couldn't be read.`);
+      }
+    }
     const zipped = zipSync(entries, { level: 6 });
     const name = `${folder ? basename(folder) : "thumbcode-files"}.zip`;
     if (isNative) {
@@ -434,8 +503,29 @@ export class Explorer {
   }
 }
 
-function looksBinary(text: string): boolean {
-  return text.slice(0, 8000).includes("\u0000");
+/** Text from bytes, or null when they aren't text (not UTF-8, or contain NUL bytes). */
+function decodeText(bytes: Uint8Array): string | null {
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return text.slice(0, 8000).includes("\u0000") ? null : text;
+  } catch {
+    return null;
+  }
+}
+
+function formatSize(n: number): string {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+  bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif", svg: "image/svg+xml", pdf: "application/pdf", zip: "application/zip",
+};
+
+function mimeFor(name: string): string {
+  return MIME[splitExt(name)[1].slice(1).toLowerCase()] ?? "application/octet-stream";
 }
 
 async function webSave(blob: Blob, name: string, type: string): Promise<void> {

@@ -19,8 +19,15 @@ import { menuList, Overlays } from "./ui/overlay";
 import { Explorer } from "./ui/explorer";
 import { basename, dirname } from "./paths";
 import { isNative, onBackButton } from "./native";
+import { appWorkspace, chooseWorkspace, copyWorkspace, phoneWorkspace, requestPhoneStorage, type Workspace } from "./workspace";
+import { loadJSON, saveJSON } from "./storage";
 
-const files = new FileStore();
+/** The open workspace. Replaced when files move to phone storage. */
+let files = new FileStore(appWorkspace(), reportError);
+
+function reportError(message: string): void {
+  overlays.toast(message, 3200);
+}
 
 // ---- Layout ------------------------------------------------------------------
 
@@ -48,13 +55,14 @@ const overlays = new Overlays(editorArea, app, () => {
 const states = new Map<string, EditorState>();
 /** Language name each cached editor state was set up with. */
 const stateLang = new Map<string, string>();
-let currentId = files.activeId;
+let currentId = "";
 let saveTimer = 0;
 let refreshQueued = false;
+let openToken = 0;
 
 const hooks: EditorHooks = {
   onUpdate(u) {
-    if (u.docChanged) {
+    if (u.docChanged && currentId) {
       const id = currentId;
       clearTimeout(saveTimer);
       saveTimer = window.setTimeout(() => files.setContent(id, u.view.state.doc.toString()), 250);
@@ -67,10 +75,11 @@ const hooks: EditorHooks = {
   },
 };
 
+/** Hands the open file's text to the store (which writes it to storage shortly). */
 function flushSave(): void {
+  if (!currentId) return;
   clearTimeout(saveTimer);
   files.setContent(currentId, view.state.doc.toString());
-  files.persist();
 }
 
 function languageExtension(file: FileRec): Extension {
@@ -80,12 +89,12 @@ function languageExtension(file: FileRec): Extension {
 }
 
 function makeState(file: FileRec): EditorState {
-  const state = createState(file.content, settings.value, languageExtension(file), hooks);
+  const state = createState(file.content ?? "", settings.value, languageExtension(file), hooks);
   stateLang.set(file.id, languageFor(file)?.support ? languageFor(file)!.name : "");
   return state;
 }
 
-const view = new EditorView({ state: makeState(files.active), parent: editorHost });
+const view = new EditorView({ state: createState("", settings.value, fileLanguage.of(""), hooks), parent: editorHost });
 
 /** Loads syntax highlighting for the open file if it isn't set up yet. */
 async function ensureLanguage(file: FileRec): Promise<void> {
@@ -108,17 +117,25 @@ async function ensureLanguage(file: FileRec): Promise<void> {
   }
 }
 
-function openFile(id: string): void {
-  if (id !== currentId) {
-    flushSave();
-    states.set(currentId, view.state);
+/** Opens a text file in the editor (`reload` re-reads it even if it is already open). */
+async function openFile(id: string, reload = false): Promise<void> {
+  const token = ++openToken;
+  if (id !== currentId) flushSave();
+  const file = await files.ensureContent(id);
+  if (!file || token !== openToken) return;
+  if (file.binary) {
+    void explorer.preview(file);
+    return;
+  }
+  if (id !== currentId || reload) {
+    if (currentId && files.get(currentId) && id !== currentId) states.set(currentId, view.state);
+    if (reload) states.delete(id);
     files.setActive(id);
     currentId = id;
-    const file = files.active;
     const cached = states.get(id);
     view.setState(cached ? cached.update({ effects: settingEffects(settings.value) }).state : makeState(file));
   }
-  void ensureLanguage(files.active);
+  void ensureLanguage(file);
   updateHeader();
   keyboard.refresh();
 }
@@ -295,23 +312,27 @@ function filesRemoved(ids: string[]): void {
   }
   if (!files.get(currentId)) {
     clearTimeout(saveTimer);
-    const next = files.active;
-    currentId = next.id;
-    view.setState(states.get(next.id)?.update({ effects: settingEffects(settings.value) }).state ?? makeState(next));
-    void ensureLanguage(next);
+    currentId = "";
+    void openFile(files.activeId, true);
   }
   updateHeader();
   keyboard.refresh();
 }
 
 const explorer = new Explorer({
-  files,
+  get files() {
+    return files;
+  },
+  storageLabel: () => files.ws.label,
+  storageShared: () => files.ws.shared,
+  canUsePhoneStorage: () => isNative && !files.ws.shared,
+  usePhoneStorage,
+  refresh: refreshFiles,
   overlays,
   currentId: () => currentId,
   flushSave,
   openFile(id) {
-    openFile(id);
-    view.focus();
+    void openFile(id).then(() => view.focus());
   },
   pathsChanged(ids) {
     // A new extension can mean a new language.
@@ -323,7 +344,82 @@ const explorer = new Explorer({
   toast: (m, ms) => overlays.toast(m, ms),
 });
 
-setWorkspace({ files: () => files.files.map((f) => f.name), current: () => files.active.name });
+setWorkspace({ files: () => files.files.map((f) => f.name), current: () => files.get(currentId)?.name ?? "" });
+
+/** Re-reads the folder so files added by other apps (Files, Gallery...) show up. */
+async function refreshFiles(): Promise<void> {
+  flushSave();
+  let changed = false;
+  try {
+    changed = await files.refresh();
+  } catch {
+    return;
+  }
+  const open = files.get(currentId);
+  // The open file was deleted, or changed by another app: show what is on disk now.
+  if (!open || open.content === null) {
+    currentId = open ? currentId : "";
+    await openFile(open ? open.id : files.activeId, true);
+  }
+  if (changed) explorer.update();
+  updateHeader();
+}
+
+/** Switches to another storage location and opens its files. */
+async function useWorkspace(ws: Workspace): Promise<void> {
+  flushSave();
+  await files.flush();
+  states.clear();
+  stateLang.clear();
+  currentId = "";
+  files = new FileStore(ws, reportError);
+  await files.load();
+  await openFile(files.activeId, true);
+}
+
+/** Asks for file access, then copies the app's files to Documents/Thumbcode and uses them from there. */
+async function usePhoneStorage(): Promise<void> {
+  const ok = await requestPhoneStorage();
+  if (!ok) {
+    overlays.toast("Thumbcode didn't get file access, so files stay inside the app.", 3500);
+    return;
+  }
+  overlays.toast("Moving your files to Documents/Thumbcode...", 6000);
+  flushSave();
+  await files.flush();
+  try {
+    const target = phoneWorkspace();
+    const copied = await copyWorkspace(files.ws, target);
+    await useWorkspace(target);
+    overlays.toast(`Your files are in Documents/Thumbcode${copied ? ` (${copied} copied)` : ""}.`, 3500);
+  } catch (e) {
+    overlays.toast(`Couldn't copy files to Documents/Thumbcode: ${String((e as Error)?.message ?? e)}`, 4000);
+  }
+}
+
+/** First start of the Android app: offer to keep projects where other apps can reach them. */
+function offerPhoneStorage(): void {
+  const KEY = "thumbcode.storageAsked";
+  if (!isNative || files.ws.shared || loadJSON(KEY, false)) return;
+  saveJSON(KEY, true);
+  const allow = h("button.btn.primary", { type: "button" }, "Allow file access");
+  const later = h("button.btn", { type: "button" }, "Not now");
+  const sheet = overlays.sheet({
+    title: "Keep projects in your phone's storage?",
+    body: h(
+      "div.storage-offer",
+      {},
+      h("p", {}, "Thumbcode can save your projects in Documents/Thumbcode. Then you can add images and other files with the Files or Gallery app, and every app can open what you make."),
+      h("p", {}, "Android will show a screen to allow Thumbcode to manage files. Turn it on, then come back."),
+      h("div.dialog-actions", {}, later, allow)
+    ),
+  });
+  allow.addEventListener("click", () => {
+    sheet.close();
+    void usePhoneStorage();
+  });
+  later.addEventListener("click", () => sheet.close());
+}
 
 // ---- Language picker -----------------------------------------------------------
 
@@ -447,6 +543,15 @@ function settingRow(label: string, control: HTMLElement, note?: string): HTMLEle
   return h("div.set-row", {}, h("div.set-text", {}, h("span.set-label", {}, label), note ? h("span.set-note", {}, note) : null), control);
 }
 
+function storageButton(): HTMLElement {
+  const b = h("button.btn.small.primary", { type: "button" }, "Use phone storage");
+  b.addEventListener("click", () => {
+    overlays.closeAll();
+    void usePhoneStorage();
+  });
+  return b;
+}
+
 function openSettings(): void {
   const body = h(
     "div.settings",
@@ -456,6 +561,16 @@ function openSettings(): void {
     settingRow("Key height", segmented("keySize", [["compact", "S"], ["normal", "M"], ["tall", "L"]])),
     settingRow("Shift symbols on keys", toggle("hints"), "The small symbol in each key's corner"),
     isNative || "vibrate" in navigator ? settingRow("Vibrate on key press", toggle("vibrate")) : null,
+    h("h3.set-group", {}, "Files"),
+    settingRow(
+      "Saved in",
+      isNative && !files.ws.shared ? storageButton() : h("span.set-value", {}, files.ws.label),
+      isNative && !files.ws.shared
+        ? "Inside the app. Move projects to Documents/Thumbcode to add images with other apps."
+        : files.ws.shared
+          ? "Other apps like Files and Gallery can add files here."
+          : "Files stay in this browser on this device."
+    ),
     h("h3.set-group", {}, "Editor"),
     settingRow("Text size", stepper("fontSize", 9, 28, "px"), "You can also pinch the code"),
     settingRow("Indent", segmented("tabSize", [[2, "2"], [4, "4"], [8, "8"]]), "Spaces per tab"),
@@ -538,13 +653,37 @@ titleBtn.addEventListener("click", () => void explorer.renameFile(files.active))
 
 // ---- Start -----------------------------------------------------------------------
 
-window.addEventListener("pagehide", flushSave);
+function saveNow(): void {
+  flushSave();
+  void files.flush();
+}
+window.addEventListener("pagehide", saveNow);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") flushSave();
+  if (document.visibilityState === "hidden") saveNow();
+  // Back in the app: pick up files other apps added meanwhile.
+  else if (started) void refreshFiles();
 });
 
-openFile(currentId);
-if (settings.value.keyboard === "custom") view.focus();
+let started = false;
+
+async function start(): Promise<void> {
+  let ws = await chooseWorkspace();
+  try {
+    files = new FileStore(ws, reportError);
+    await files.load();
+  } catch (e) {
+    // The phone folder can't be read (e.g. access was removed): fall back to the app's own storage.
+    ws = appWorkspace();
+    files = new FileStore(ws, reportError);
+    await files.load();
+    overlays.toast(`Couldn't open Documents/Thumbcode, using the app's storage. ${String((e as Error)?.message ?? "")}`, 4000);
+  }
+  await openFile(files.activeId, true);
+  started = true;
+  if (settings.value.keyboard === "custom") view.focus();
+  offerPhoneStorage();
+}
+void start();
 
 // Android back button: close the top menu, then find, then leave the app.
 onBackButton(() => {
@@ -569,4 +708,11 @@ if (!__SINGLE_FILE__ && !isNative && "serviceWorker" in navigator && (location.p
 }
 
 // Handle for debugging from the browser console.
-(window as unknown as { thumbcode: unknown }).thumbcode = { view, files, settings };
+(window as unknown as { thumbcode: unknown }).thumbcode = {
+  view,
+  settings,
+  get files() {
+    return files;
+  },
+  ready: () => started,
+};

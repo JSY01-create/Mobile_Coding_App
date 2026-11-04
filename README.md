@@ -46,7 +46,18 @@ The menu at the top left opens the file tree, like the Explorer in VS Code.
   duplicates, saves or deletes it. The ⋯ next to a folder adds a file or
   folder inside it, renames or moves it with everything in it, saves it as a
   `.zip`, or deletes it.
-- Imported `.zip` files keep their folders; files that aren't text are skipped.
+- Images and other non-text files can be added to any folder. Tapping an
+  image shows it; non-text files can be moved, shared and deleted.
+- Imported `.zip` files keep their folders and images.
+
+### Where files are saved
+
+- **Android app:** in **Documents/Thumbcode** on the phone, after you allow
+  "All files access" (the app offers this on first start, and in Settings).
+  Files you put there with the Files or Gallery app appear in the tree when
+  you come back to the app, or with the refresh button. Without the
+  permission, files stay inside the app.
+- **Browser:** in the browser's storage on this device (IndexedDB).
 - Code can point at other files in the project: in `href="…"`, `src="…"`,
   `import … from "./…"`, `require("./…")`, CSS `url(…)` and Markdown links,
   suggestions list the project's files with the right relative path.
@@ -149,7 +160,9 @@ npm run typecheck
 | `src/snippets/index.ts` | Emmet and shortcut suggestions, tab expansion |
 | `src/editor.ts`, `src/theme.ts` | CodeMirror setup, colors |
 | `src/main.ts` | App shell: menus, settings |
-| `src/files.ts`, `src/paths.ts` | Files and folders, saved on the device |
+| `src/files.ts`, `src/paths.ts` | Files and folders in memory, saved through the workspace |
+| `src/workspace.ts` | Storage: Documents/Thumbcode, app storage, or IndexedDB |
+| `android/app/src/main/java/.../StorageAccessPlugin.java` | Asks Android for file access |
 | `src/ui/explorer.ts` | File tree, create/rename/move/delete, zip import and export |
 | `src/snippets/paths.ts` | File path suggestions |
 | `src/native.ts` | Android app extras: clipboard, share sheet, back button, haptics |

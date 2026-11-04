@@ -54,6 +54,7 @@ export const icons = {
   folder: '<path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2h8A1.5 1.5 0 0 1 20.5 9v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5V7z"/>',
   folderOpen: '<path d="M3.5 17.5V7A1.5 1.5 0 0 1 5 5.5h4l2 2h7A1.5 1.5 0 0 1 19.5 9v1.5"/><path d="M3.5 17.5l2.6-6.2a1.5 1.5 0 0 1 1.4-.8h12.4a1 1 0 0 1 .9 1.4l-2.4 5.7a1.5 1.5 0 0 1-1.4.9H5a1.5 1.5 0 0 1-1.5-1z"/>',
   zip: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5"/><path d="M12 3.5v2M12 7.5v2M12 11.5v2"/><rect x="10.5" y="15" width="3" height="3" rx=".6"/>',
+  refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/>',
   chevronRightSmall: '<path d="M10 7l5 5-5 5"/>',
   keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7.5 14h9"/>',
 };
