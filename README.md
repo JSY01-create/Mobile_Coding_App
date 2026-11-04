@@ -91,6 +91,12 @@ Mobile browsers have no developer tools, so the preview brings its own:
 - **Inspect** adds [Eruda](https://github.com/liriliri/eruda): elements and
   styles, network, storage, sources.
 - **Desktop width** shows the page at 1280 px, scaled to fit.
+- **Keyboard for the page** (keyboard button): phones only show a keyboard for
+  text fields, so `keydown` listeners never fire. This keyboard sends real
+  `keydown` / `keypress` / `keyup` events (`key`, `code`, `keyCode`) to the page:
+  letters in your layout, digits, Enter, Backspace, Space, Shift, Esc, Tab and
+  arrows; holding a key repeats it, and a focused text field gets the typing.
+  It opens by itself when the project's code listens for key events.
 
 ## Color picker
 

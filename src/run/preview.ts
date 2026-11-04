@@ -4,6 +4,8 @@ import type { FileStore } from "../files";
 import { basename, dirname } from "../paths";
 import { h, icon, icons } from "../ui/dom";
 import { preludeTag, type FromPage, type Wire } from "./prelude";
+import type { LetterLayout } from "../keyboard/layout";
+import { PageKeyboard } from "./pageKeyboard";
 import { encodePath, prepareFiles } from "./server";
 
 export type RunTarget = { kind: "html" | "js" | "python"; path: string };
@@ -13,7 +15,14 @@ export interface PreviewHost {
   /** Opens a file in the editor at a line (from an error in the console). */
   openAt(path: string, line?: number): void;
   onClose(): void;
+  /** Letter layout for the page keyboard. */
+  layout(): LetterLayout;
+  /** Vibration on a key press, when it is turned on. */
+  tap(): void;
 }
+
+/** Code that listens for keys; the page keyboard opens by itself for it. */
+const USES_KEYS = /\b(?:on)?key(?:down|up|press)\b/i;
 
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
 const MAX_LOG = 1500;
@@ -32,6 +41,10 @@ export class Preview {
   private counts: HTMLElement;
   private inspectBtn: HTMLButtonElement;
   private deviceBtn: HTMLButtonElement;
+  private keysBtn: HTMLButtonElement;
+  private keys: PageKeyboard;
+  /** What the person chose for the page keyboard in this run; null = decide from the code. */
+  private keysChoice: boolean | null = null;
   private target: RunTarget | null = null;
   private size: Size = "half";
   private desktop = false;
@@ -58,12 +71,18 @@ export class Preview {
       void this.reload();
     });
     this.deviceBtn = btn("Desktop width", icons.monitor, () => this.toggleDevice());
+    this.keys = new PageKeyboard(() => this.frame, () => host.layout(), () => host.tap());
+    this.keysBtn = btn("Keyboard for the page", icons.keyboard, () => {
+      this.keysChoice = !this.keys.visible;
+      this.showKeys(this.keysChoice);
+    });
     const bar = h(
       "div.pv-bar",
       {},
       btn("Back to code", icons.chevronLeft, () => this.close()),
       this.title,
       btn("Run again", icons.refresh, () => void this.reload()),
+      this.keysBtn,
       this.deviceBtn,
       this.inspectBtn
     );
@@ -96,7 +115,7 @@ export class Preview {
     const go = h("button.pv-go", { type: "button", "aria-label": "Run command" }, icon(icons.play, { size: 16 }));
     go.addEventListener("click", () => this.runCommand());
     const consoleEl = h("div.pv-console", {}, consoleBar, this.log, h("div.pv-prompt", {}, h("span.pv-caret", {}, "›"), this.input, go));
-    this.el = h("section.preview", { role: "dialog", "aria-label": "Run" }, bar, this.frameWrap, consoleEl);
+    this.el = h("section.preview", { role: "dialog", "aria-label": "Run" }, bar, this.frameWrap, this.keys.el, consoleEl);
     this.el.hidden = true;
     window.addEventListener("message", (e) => this.onMessage(e));
     window.addEventListener("resize", () => this.fitDevice());
@@ -113,6 +132,9 @@ export class Preview {
     this.setSize(target.kind === "html" ? "half" : "full");
     this.inspectBtn.hidden = target.kind !== "html";
     this.deviceBtn.hidden = target.kind !== "html";
+    this.keysBtn.hidden = target.kind === "python";
+    this.keysChoice = null;
+    if (target.kind === "python") this.showKeys(false);
     this.input.placeholder = target.kind === "python" ? "Run Python" : "Run JavaScript in the page";
     (document.activeElement as HTMLElement | null)?.blur?.();
     await this.reload();
@@ -145,6 +167,28 @@ export class Preview {
     this.frame = frame;
     this.frameWrap.replaceChildren(frame);
     this.started = performance.now();
+    this.fitDevice();
+    if (this.keysChoice === null && target.kind !== "python") this.showKeys(await this.usesKeys(target));
+  }
+
+  /** Whether the page or the scripts next to it listen for keydown / keyup / keypress. */
+  private async usesKeys(target: RunTarget): Promise<boolean> {
+    const files = this.host.files;
+    const dir = dirname(target.path);
+    for (const f of files.files) {
+      if (f.binary || !(f.name === target.path || (/\.(m?js|cjs|ts)$/i.test(f.name) && (!dir || f.name.startsWith(dir + "/"))))) continue;
+      const text = (await files.ensureContent(f.id))?.content ?? "";
+      if (USES_KEYS.test(text)) return true;
+    }
+    return false;
+  }
+
+  private showKeys(on: boolean): void {
+    this.keys.show(on);
+    this.keysBtn.setAttribute("aria-pressed", String(on));
+    // Make room: the console shrinks to its bar (tap it to open it again).
+    if (on && this.size === "half") this.setSize("min");
+    if (!on && this.size === "min" && !this.inspect && this.target?.kind === "html") this.setSize("half");
     this.fitDevice();
   }
 

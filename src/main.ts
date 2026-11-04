@@ -23,7 +23,7 @@ import { colorsIn, formatOf, parseColor } from "./color/color";
 import { openColorPicker } from "./color/picker";
 import { colorRangeAt, pickColorAt, setColorOpener } from "./color/swatches";
 import { basename, dirname } from "./paths";
-import { isNative, onBackButton } from "./native";
+import { isNative, nativeTap, onBackButton } from "./native";
 import { appWorkspace, chooseWorkspace, copyWorkspace, phoneWorkspace, requestPhoneStorage, type Workspace } from "./workspace";
 import { loadJSON, saveJSON } from "./storage";
 
@@ -480,6 +480,12 @@ const preview = new Preview({
   onClose() {
     if (settings.value.keyboard === "custom") view.focus();
   },
+  layout: () => settings.value.layout,
+  tap() {
+    if (!settings.value.vibrate) return;
+    if (isNative) nativeTap();
+    else navigator.vibrate?.(5);
+  },
 });
 app.append(preview.el);
 
@@ -832,4 +838,8 @@ if (!__SINGLE_FILE__ && !isNative && "serviceWorker" in navigator && (location.p
     return files;
   },
   ready: () => started,
+  open: (path: string) => {
+    const f = files.byPath(path);
+    return f ? openFile(f.id) : Promise.resolve();
+  },
 };
