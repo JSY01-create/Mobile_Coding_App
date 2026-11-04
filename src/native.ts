@@ -47,6 +47,20 @@ export async function nativeShareFile(name: string, content: string): Promise<bo
   return true;
 }
 
+/** Like nativeShareFile, for binary data such as a zip. */
+export async function nativeShareBytes(name: string, bytes: Uint8Array): Promise<boolean> {
+  if (!isNative) return false;
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const { uri } = await Filesystem.writeFile({ path: name, data: btoa(bin), directory: Directory.Cache });
+  try {
+    await Share.share({ title: name, files: [uri], dialogTitle: `Save or send ${name}` });
+  } catch (e) {
+    if (!/cancel/i.test(String((e as Error)?.message ?? e))) throw e;
+  }
+  return true;
+}
+
 export function nativeTap(): void {
   if (isNative) void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
 }

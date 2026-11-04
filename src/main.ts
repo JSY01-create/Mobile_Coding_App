@@ -11,20 +11,23 @@ import { FileStore, type FileRec } from "./files";
 import { Keyboard, type KeyboardHost } from "./keyboard/keyboard";
 import { EditorTarget, InputTarget, type Target } from "./keyboard/targets";
 import { writeClipboard } from "./keyboard/clipboard";
-import { allLanguages, detect, extTag, languageFor, loadLanguage, PLAIN, popularNames } from "./languages";
+import { allLanguages, detect, languageFor, loadLanguage, PLAIN, popularNames } from "./languages";
 import { settings, type Settings } from "./settings";
-import { fileLanguage, prepareFor } from "./snippets";
+import { fileLanguage, prepareFor, setWorkspace } from "./snippets";
 import { h, icon, icons, kbInput, keepFocus, refreshKbInputs } from "./ui/dom";
 import { menuList, Overlays } from "./ui/overlay";
-import { isNative, nativeShareFile, onBackButton } from "./native";
+import { Explorer } from "./ui/explorer";
+import { basename, dirname } from "./paths";
+import { isNative, onBackButton } from "./native";
 
 const files = new FileStore();
 
 // ---- Layout ------------------------------------------------------------------
 
 const app = document.getElementById("app")!;
+const fileDir = h("span.file-dir");
 const fileName = h("span.file-name");
-const titleBtn = h("button.file-title", { type: "button", "aria-label": "Rename file" }, fileName);
+const titleBtn = h("button.file-title", { type: "button", "aria-label": "Rename or move file" }, fileDir, fileName);
 const langBtn = h("button.lang-pill", { type: "button", "aria-label": "Change language" }, h("span.lang-name"), icon(icons.chevronDown, { size: 14 }));
 const filesBtn = h("button.icon-btn", { type: "button", "aria-label": "Files" }, icon(icons.menu));
 const moreBtn = h("button.icon-btn", { type: "button", "aria-label": "More" }, icon(icons.more));
@@ -122,10 +125,13 @@ function openFile(id: string): void {
 
 function updateHeader(): void {
   const file = files.active;
-  fileName.textContent = file.name;
+  const dir = dirname(file.name);
+  const parts = dir ? dir.split("/") : [];
+  fileDir.textContent = parts.length ? `${parts.length > 2 ? "\u2026/" : ""}${parts.slice(-2).join("/")}/` : "";
+  fileName.textContent = basename(file.name);
   const lang = languageFor(file);
   langBtn.querySelector(".lang-name")!.textContent = lang?.name ?? PLAIN;
-  document.title = `${file.name} · Thumbcode`;
+  document.title = `${basename(file.name)} · Thumbcode`;
 }
 
 // ---- Keyboard ----------------------------------------------------------------
@@ -281,205 +287,43 @@ syncViewport();
 
 // ---- Files -------------------------------------------------------------------
 
-function timeAgo(ms: number): string {
-  const s = (Date.now() - ms) / 1000;
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  if (s < 172800) return "yesterday";
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function badge(name: string): HTMLElement {
-  const tag = extTag(name);
-  return h("span.badge", { "data-ext": tag }, tag);
-}
-
-function validName(name: string): string | null {
-  if (!name) return "Enter a name.";
-  if (/[\\/]/.test(name)) return "Names can't contain / or \\.";
-  if (name.length > 120) return "Use a shorter name.";
-  return null;
-}
-
-/** Selects the part before the extension, so typing replaces just the name. */
-function baseRange(name: string): [number, number] {
-  const dot = name.lastIndexOf(".");
-  return [0, dot > 0 ? dot : name.length];
-}
-
-async function newFile(): Promise<void> {
-  const ext = files.active.name.includes(".") ? files.active.name.slice(files.active.name.lastIndexOf(".")) : ".txt";
-  const suggestion = files.uniqueName(`untitled${ext}`);
-  const name = await overlays.prompt({
-    title: "New file",
-    value: suggestion,
-    placeholder: "name.py",
-    ok: "Create",
-    select: baseRange(suggestion),
-    validate: validName,
-  });
-  if (!name) return;
-  const file = files.create(name);
-  openFile(file.id);
-  const lang = detect(file.name);
-  overlays.toast(lang ? `${lang.name} file` : "Plain text file. Add an extension like .py for highlighting.", 2200);
-}
-
-async function renameFile(file: FileRec): Promise<void> {
-  const name = await overlays.prompt({
-    title: "Rename file",
-    value: file.name,
-    ok: "Rename",
-    select: baseRange(file.name),
-    validate: validName,
-  });
-  if (!name || name === file.name) return;
-  files.rename(file.id, name);
-  if (file.id === currentId) void ensureLanguage(file);
-  else stateLang.delete(file.id);
-  updateHeader();
-}
-
-async function deleteFile(file: FileRec): Promise<void> {
-  if (files.files.length <= 1) {
-    overlays.toast("You need at least one file.");
-    return;
+/** Drops cached editors for deleted files and switches away if the open one is gone. */
+function filesRemoved(ids: string[]): void {
+  for (const id of ids) {
+    states.delete(id);
+    stateLang.delete(id);
   }
-  const ok = await overlays.confirm({
-    title: `Delete ${file.name}?`,
-    message: "It is removed from this device. This can't be undone.",
-    ok: "Delete",
-    danger: true,
-  });
-  if (!ok) return;
-  const wasOpen = file.id === currentId;
-  if (wasOpen) clearTimeout(saveTimer);
-  files.remove(file.id);
-  states.delete(file.id);
-  stateLang.delete(file.id);
-  if (wasOpen) {
-    currentId = "";
+  if (!files.get(currentId)) {
+    clearTimeout(saveTimer);
     const next = files.active;
-    view.setState(states.get(next.id)?.update({ effects: settingEffects(settings.value) }).state ?? makeState(next));
     currentId = next.id;
+    view.setState(states.get(next.id)?.update({ effects: settingEffects(settings.value) }).state ?? makeState(next));
     void ensureLanguage(next);
+  }
+  updateHeader();
+  keyboard.refresh();
+}
+
+const explorer = new Explorer({
+  files,
+  overlays,
+  currentId: () => currentId,
+  flushSave,
+  openFile(id) {
+    openFile(id);
+    view.focus();
+  },
+  pathsChanged(ids) {
+    // A new extension can mean a new language.
+    for (const id of ids) if (id !== currentId) stateLang.delete(id);
+    if (ids.includes(currentId)) void ensureLanguage(files.active);
     updateHeader();
-  }
-  overlays.toast(`Deleted ${file.name}`);
-}
-
-function duplicateFile(file: FileRec): void {
-  if (file.id === currentId) flushSave();
-  const copy = files.duplicate(file.id);
-  if (copy) {
-    files.setActive(currentId);
-    openFile(copy.id);
-  }
-}
-
-async function exportFile(file: FileRec): Promise<void> {
-  if (file.id === currentId) flushSave();
-  if (isNative) {
-    try {
-      await nativeShareFile(file.name, file.content);
-    } catch {
-      overlays.toast(`Couldn't save ${file.name}.`);
-    }
-    return;
-  }
-  const blob = new Blob([file.content], { type: "text/plain" });
-  try {
-    const shared = new File([blob], file.name, { type: "text/plain" });
-    if (navigator.canShare?.({ files: [shared] })) {
-      await navigator.share({ files: [shared], title: file.name });
-      return;
-    }
-  } catch (e) {
-    if ((e as Error).name === "AbortError") return;
-  }
-  const a = h("a", { href: URL.createObjectURL(blob), download: file.name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-const fileInput = h("input.hidden-input", { type: "file", multiple: true, "aria-hidden": "true", tabindex: "-1" });
-document.body.append(fileInput);
-fileInput.addEventListener("change", async () => {
-  const picked = [...(fileInput.files ?? [])];
-  fileInput.value = "";
-  let last: FileRec | null = null;
-  for (const f of picked) {
-    if (f.size > 5_000_000) {
-      overlays.toast(`${f.name} is too large to open (5 MB limit).`, 2600);
-      continue;
-    }
-    last = files.create(f.name, await f.text());
-    files.setActive(currentId);
-  }
-  if (last) {
-    openFile(last.id);
-    overlays.toast(picked.length > 1 ? `Opened ${picked.length} files` : `Opened ${last.name}`);
-  }
+  },
+  filesRemoved,
+  toast: (m, ms) => overlays.toast(m, ms),
 });
 
-function fileActions(file: FileRec): void {
-  const sheet = overlays.sheet({
-    title: file.name,
-    body: menuList([
-      { label: "Rename", icon: icons.pencil, run: () => { sheet.close(); void renameFile(file); } },
-      { label: "Duplicate", icon: icons.copy, run: () => { sheet.close(); duplicateFile(file); } },
-      { label: "Save to device", icon: icons.download, run: () => { sheet.close(); void exportFile(file); } },
-      null,
-      { label: "Delete", icon: icons.trash, danger: true, run: () => { sheet.close(); void deleteFile(file); } },
-    ]),
-  });
-}
-
-function openDrawer(): void {
-  flushSave();
-  const list = h("div.file-list");
-  const drawer = overlays.drawer(
-    h(
-      "div.drawer-inner",
-      {},
-      h("div.drawer-head", {}, h("h2", {}, "Files"), h("span.drawer-count", {}, `${files.files.length}`)),
-      h("div.drawer-actions", {}, actionButton("New file", icons.plus, () => { drawer.close(); void newFile(); }),
-        actionButton("Open", icons.upload, () => { drawer.close(); fileInput.click(); })),
-      list,
-      h("p.drawer-foot", {}, "Files are saved on this device.")
-    ),
-    "Files"
-  );
-  for (const f of files.sorted()) {
-    const lang = languageFor(f)?.name ?? PLAIN;
-    const open = h(
-      `button.file-row${f.id === currentId ? ".active" : ""}` as "button",
-      { type: "button" },
-      badge(f.name),
-      h("span.file-row-text", {}, h("span.file-row-name", {}, f.name), h("span.file-row-meta", {}, `${lang} · ${timeAgo(f.updated)}`))
-    );
-    open.addEventListener("click", () => {
-      drawer.close();
-      openFile(f.id);
-      view.focus();
-    });
-    const more = h("button.icon-btn.file-row-more", { type: "button", "aria-label": `Actions for ${f.name}` }, icon(icons.more));
-    more.addEventListener("click", () => {
-      drawer.close();
-      fileActions(f);
-    });
-    list.append(h("div.file-item", {}, open, more));
-  }
-}
-
-function actionButton(label: string, ic: string, run: () => void): HTMLButtonElement {
-  const b = h("button.btn.small", { type: "button" }, icon(ic, { size: 18 }), label);
-  b.addEventListener("click", run);
-  return b;
-}
+setWorkspace({ files: () => files.files.map((f) => f.name), current: () => files.active.name });
 
 // ---- Language picker -----------------------------------------------------------
 
@@ -669,26 +513,28 @@ function openMenu(): void {
   const sheet = overlays.sheet({
     title: "Menu",
     body: menuList([
-      { label: "New file", icon: icons.plus, run: run(() => void newFile()) },
-      { label: "Open from device", icon: icons.upload, run: run(() => fileInput.click()) },
-      { label: "Save to device", icon: icons.download, hint: file.name, run: run(() => void exportFile(file)) },
+      { label: "New file", icon: icons.filePlus, run: run(() => void explorer.newFile()) },
+      { label: "New folder", icon: icons.folderPlus, run: run(() => void explorer.newFolder()) },
+      { label: "Open files or a .zip", icon: icons.upload, run: run(() => explorer.pickFiles()) },
+      { label: "Save to device", icon: icons.download, hint: basename(file.name), run: run(() => void explorer.exportFile(file)) },
+      { label: "Save everything as .zip", icon: icons.zip, run: run(() => void explorer.saveZip("")) },
       { label: "Copy whole file", icon: icons.copy, run: run(async () => {
         await writeClipboard(view.state.doc.toString());
         overlays.toast("File copied");
       }) },
       null,
       { label: "Find and replace", icon: icons.search, run: run(() => openSearchPanel(view)) },
-      { label: "Rename file", icon: icons.pencil, run: run(() => void renameFile(file)) },
+      { label: "Rename or move file", icon: icons.pencil, run: run(() => void explorer.renameFile(file)) },
       { label: "Settings", icon: icons.gear, run: run(openSettings) },
       { label: "Keyboard tips", icon: icons.info, run: run(openTips) },
     ]),
   });
 }
 
-filesBtn.addEventListener("click", openDrawer);
+filesBtn.addEventListener("click", () => explorer.open());
 moreBtn.addEventListener("click", openMenu);
 langBtn.addEventListener("click", openLanguagePicker);
-titleBtn.addEventListener("click", () => void renameFile(files.active));
+titleBtn.addEventListener("click", () => void explorer.renameFile(files.active));
 
 // ---- Start -----------------------------------------------------------------------
 

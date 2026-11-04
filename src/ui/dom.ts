@@ -49,6 +49,12 @@ export const icons = {
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>',
   pencil: '<path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/>',
   trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/>',
+  filePlus: '<path d="M14 3.5H7A1.5 1.5 0 0 0 5.5 5v14A1.5 1.5 0 0 0 7 20.5h10a1.5 1.5 0 0 0 1.5-1.5V8L14 3.5z"/><path d="M14 3.5V8h4.5M12 11v6M9 14h6"/>',
+  folderPlus: '<path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2h8A1.5 1.5 0 0 1 20.5 9v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5V7z"/><path d="M12 10.5v5M9.5 13h5"/>',
+  folder: '<path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2h8A1.5 1.5 0 0 1 20.5 9v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5V7z"/>',
+  folderOpen: '<path d="M3.5 17.5V7A1.5 1.5 0 0 1 5 5.5h4l2 2h7A1.5 1.5 0 0 1 19.5 9v1.5"/><path d="M3.5 17.5l2.6-6.2a1.5 1.5 0 0 1 1.4-.8h12.4a1 1 0 0 1 .9 1.4l-2.4 5.7a1.5 1.5 0 0 1-1.4.9H5a1.5 1.5 0 0 1-1.5-1z"/>',
+  zip: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5"/><path d="M12 3.5v2M12 7.5v2M12 11.5v2"/><rect x="10.5" y="15" width="3" height="3" rx=".6"/>',
+  chevronRightSmall: '<path d="M10 7l5 5-5 5"/>',
   keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7.5 14h9"/>',
 };
 

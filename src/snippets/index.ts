@@ -3,6 +3,9 @@ import { syntaxTree } from "@codemirror/language";
 import { Facet, type EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { contextForLanguage, snippetsByContext, type Context, type SnippetDef } from "./library";
+import { pathSource } from "./paths";
+
+export { setWorkspace } from "./paths";
 
 type EmmetModule = typeof import("emmet");
 
@@ -223,7 +226,7 @@ const shortcutSource: CompletionSource = (ctx) => {
   return { from: word?.from ?? ctx.pos, options, validFor: /^\w*$/ };
 };
 
-export const shortcutSources: CompletionSource[] = [emmetSource, shortcutSource];
+export const shortcutSources: CompletionSource[] = [emmetSource, shortcutSource, pathSource];
 
 /**
  * Tab key: expand a shortcut (or, with `emmetToo`, an Emmet abbreviation) right before the cursor.

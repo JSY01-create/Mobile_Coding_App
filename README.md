@@ -34,6 +34,23 @@ find and replace, and a button to hide the keys.
 
 A setting switches to the phone's own keyboard (the arrow bar stays).
 
+## Files and folders
+
+The menu at the top left opens the file tree, like the Explorer in VS Code.
+
+- Folders open and close with a tap. Buttons at the top make a new file or
+  folder in the highlighted folder, open files or a `.zip` from the phone, and
+  save everything as a `.zip`.
+- Type a path such as `src/lib/util.py` to create the folders on the way.
+- The ⋯ next to a file renames or moves it (renaming to a new path moves it),
+  duplicates, saves or deletes it. The ⋯ next to a folder adds a file or
+  folder inside it, renames or moves it with everything in it, saves it as a
+  `.zip`, or deletes it.
+- Imported `.zip` files keep their folders; files that aren't text are skipped.
+- Code can point at other files in the project: in `href="…"`, `src="…"`,
+  `import … from "./…"`, `require("./…")`, CSS `url(…)` and Markdown links,
+  suggestions list the project's files with the right relative path.
+
 ## Languages
 
 Syntax highlighting for 140+ languages (CodeMirror 6), picked from the file
@@ -131,6 +148,9 @@ npm run typecheck
 | `src/snippets/library.ts` | Shortcuts per language |
 | `src/snippets/index.ts` | Emmet and shortcut suggestions, tab expansion |
 | `src/editor.ts`, `src/theme.ts` | CodeMirror setup, colors |
-| `src/main.ts` | App shell: files, menus, settings |
+| `src/main.ts` | App shell: menus, settings |
+| `src/files.ts`, `src/paths.ts` | Files and folders, saved on the device |
+| `src/ui/explorer.ts` | File tree, create/rename/move/delete, zip import and export |
+| `src/snippets/paths.ts` | File path suggestions |
 | `src/native.ts` | Android app extras: clipboard, share sheet, back button, haptics |
 | `android/` | Android project (Capacitor) |

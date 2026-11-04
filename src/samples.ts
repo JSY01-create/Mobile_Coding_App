@@ -42,12 +42,24 @@ to jump to the next blank.
   Rust \`pln\` \`match\`, SQL \`sel\` \`ins\` \`ct\`, and more for
   C#, Kotlin, Swift, PHP, Ruby, Dart, Shell, Markdown and Lua.
 
-## Files
+## Files and folders
 
-Tap the menu at the top left to switch files. A new file picks
-its language from the name: .py, .js, .ts, .rs, .go, .java,
-.c, .cpp, .kt, .swift, .rb, .php, .sql and over 100 more.
-Tap the language name at the top to change it.
+Tap the menu at the top left to open the file tree, like the
+Explorer in VS Code. Tap a folder to open or close it.
+
+- The buttons at the top make a new file or folder in the
+  highlighted folder. Type a path like \`src/app.js\` to make
+  folders as you go.
+- The ... next to a file or folder renames, moves, duplicates,
+  saves or deletes it. Renaming to a new path moves it.
+- Open single files or a whole project as a .zip, and save any
+  folder as a .zip.
+- In \`href="\`, \`src="\`, \`import "./\` and CSS \`url(\`, you get
+  suggestions for the files in your project.
+
+A new file picks its language from the name: .py, .js, .ts,
+.rs, .go, .java, .c, .cpp, .kt, .swift, .rb, .php, .sql and
+over 100 more. Tap the language name at the top to change it.
 
 Everything saves on this device as you type.
 `;
@@ -107,24 +119,60 @@ const html = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Pocket page</title>
-    <style>
-      body { font-family: system-ui; margin: 2rem; }
-      .card { padding: 1rem; border-radius: 12px; background: #f2f2f7; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pocket search</title>
+    <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
-    <div class="card">
+    <main class="card">
       <h1>Hello from my phone</h1>
-      <p>Written in Thumbcode.</p>
-    </div>
+      <input id="search" placeholder="Search..." />
+      <ul id="results"></ul>
+    </main>
+    <script type="module" src="js/app.js"></script>
   </body>
 </html>
+`;
+
+const css = `:root {
+  --bg: #f2f2f7;
+  --ink: #1c1c1e;
+  --accent: #0a84ff;
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1rem;
+  font-family: system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.card {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1.25rem;
+  border-radius: 14px;
+  background: #fff;
+}
+
+#search {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #c7c7cc;
+  border-radius: 10px;
+  font: inherit;
+}
+
+#search:focus {
+  outline: 2px solid var(--accent);
+}
 `;
 
 export const sampleFiles: { name: string; content: string }[] = [
   { name: "welcome.md", content: welcome },
   { name: "inventory.py", content: python },
-  { name: "debounce.js", content: javascript },
-  { name: "index.html", content: html },
+  { name: "website/index.html", content: html },
+  { name: "website/css/style.css", content: css },
+  { name: "website/js/app.js", content: javascript },
 ];
