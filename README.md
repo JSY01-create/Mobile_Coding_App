@@ -32,6 +32,11 @@ find and replace, and a button to hide the keys.
 - Hold **copy** for cut, select line, select all.
 - Pinch the code to zoom.
 
+Settings → **Letter layout** switches the letter keys between **QWERTY**,
+**QWERTZ** (German), **AZERTY** (French) and **Colemak**; the symbol and number
+rows stay the same. Holding a letter shows its capital and accented letters
+(`ä ö ü ß é è ç ñ`...), capitals too when shift is on.
+
 A setting switches to the phone's own keyboard (the arrow bar stays).
 
 ## Files and folders

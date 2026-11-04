@@ -1,6 +1,6 @@
 import { isNative, nativeTap } from "../native";
 import { h } from "../ui/dom";
-import { accessoryRow, keyboardRows, keyIcons, type Action, type Cmd, type KeyDef, type RowDef } from "./layout";
+import { accessoryRow, keyboardRowsFor, keyIcons, type Action, type Alt, type Cmd, type KeyDef, type LetterLayout, type RowDef } from "./layout";
 import type { Target } from "./targets";
 
 export interface KeyboardHost {
@@ -34,6 +34,8 @@ interface Press {
   timer?: number;
   repeatTimer?: number;
   popupIndex: number;
+  /** The long-press options shown for this press (they follow shift). */
+  alts?: Alt[];
 }
 
 const LONG_PRESS_MS = 350;
@@ -59,22 +61,38 @@ export class Keyboard {
   private popup: HTMLElement;
   private popupOwner: Press | null = null;
 
-  constructor(private host: KeyboardHost) {
-    this.bar = h("div.accessory", { role: "toolbar", "aria-label": "Cursor and tools" }, this.renderRow(accessoryRow));
+  private layout: LetterLayout;
+
+  constructor(private host: KeyboardHost, layout: LetterLayout = "qwerty") {
+    this.layout = layout;
+    this.bar = h("div.accessory", { role: "toolbar", "aria-label": "Cursor and tools" });
     this.balloon = h("div.kb-balloon", { "aria-hidden": "true" });
     this.popup = h("div.kb-popup", { role: "listbox" });
     this.balloon.hidden = true;
     this.popup.hidden = true;
-    this.el = h(
-      "div.keyboard",
-      { role: "group", "aria-label": "Code keyboard" },
-      ...keyboardRows.map((r) => this.renderRow(r)),
-      this.balloon,
-      this.popup
-    );
+    this.el = h("div.keyboard", { role: "group", "aria-label": "Code keyboard" });
+    this.build();
     this.listen(this.el);
     this.listen(this.bar);
+  }
+
+  private build(): void {
+    this.keys.clear();
+    this.keyEls.clear();
+    this.presses.clear();
+    this.bar.replaceChildren(this.renderRow(accessoryRow));
+    this.el.replaceChildren(...keyboardRowsFor(this.layout).map((r) => this.renderRow(r)), this.balloon, this.popup);
+    this.hideBalloon();
+    this.closePopup();
     this.updateLabels();
+  }
+
+  /** Switches the letter keys (QWERTY, QWERTZ, AZERTY, Colemak). */
+  setLayout(layout: LetterLayout): void {
+    if (layout === this.layout) return;
+    this.layout = layout;
+    this.build();
+    this.refresh();
   }
 
   private renderRow(row: RowDef): HTMLElement {
@@ -214,7 +232,7 @@ export class Keyboard {
     if (p.mode === "pending") {
       this.fire(p.key);
     } else if (p.mode === "popup") {
-      const choice = p.key.alts?.[p.popupIndex];
+      const choice = p.alts?.[p.popupIndex];
       this.closePopup();
       if (choice) this.run(choice.action);
     } else if (p.mode === "trackpad") {
@@ -384,9 +402,8 @@ export class Keyboard {
     if (this.presses.get(p.pointerId) !== p || p.mode !== "pending" || !p.key.alts?.length) return;
     p.mode = "popup";
     this.hideBalloon();
-    this.popup.replaceChildren(
-      ...p.key.alts.map((a, i) => h("div.kb-opt", { role: "option", "data-i": i }, a.label))
-    );
+    p.alts = this.altsFor(p.key);
+    this.popup.replaceChildren(...p.alts.map((a, i) => h("div.kb-opt", { role: "option", "data-i": i }, a.label)));
     this.popup.classList.remove("rev");
     this.popup.hidden = false;
     const kb = this.el.getBoundingClientRect();
@@ -406,6 +423,16 @@ export class Keyboard {
     p.popupIndex = 0;
     this.pickPopup(p, p.x0);
     this.buzz();
+  }
+
+  /** Long-press options. With shift on, a letter offers the small letter and capital accents (Ä, É...). */
+  private altsFor(key: KeyDef): Alt[] {
+    const alts = key.alts ?? [];
+    if (!key.letter || this.shift === "off") return alts;
+    return alts.map((a, i) => {
+      const label = i === 0 ? key.label : a.label.toUpperCase();
+      return { label, action: { kind: "text", text: label } };
+    });
   }
 
   private pickPopup(p: Press, x: number): void {

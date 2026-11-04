@@ -10,6 +10,7 @@ import { createState, parts, settingEffects, type EditorHooks } from "./editor";
 import { FileStore, type FileRec } from "./files";
 import { Keyboard, type KeyboardHost } from "./keyboard/keyboard";
 import { EditorTarget, InputTarget, type Target } from "./keyboard/targets";
+import { letterLayouts, type LetterLayout } from "./keyboard/layout";
 import { writeClipboard } from "./keyboard/clipboard";
 import { allLanguages, detect, languageFor, loadLanguage, mainExtension, PLAIN, popularNames } from "./languages";
 import { settings, type Settings } from "./settings";
@@ -193,7 +194,7 @@ const host: KeyboardHost = {
   afterInput: queueRefresh,
 };
 
-const keyboard = new Keyboard(host);
+const keyboard = new Keyboard(host, settings.value.layout);
 dock.append(keyboard.bar, keyboard.el);
 
 function queueRefresh(): void {
@@ -255,6 +256,7 @@ document.addEventListener("selectionchange", queueRefresh);
 function applySettings(s: Settings): void {
   app.classList.toggle("mode-system", s.keyboard === "system");
   app.dataset.keySize = s.keySize;
+  keyboard.setLayout(s.layout);
   keyboard.setHints(s.hints);
   refreshKbInputs();
 }
@@ -611,8 +613,13 @@ function stepper(key: "fontSize", min: number, max: number, unit: string): HTMLE
   return h("div.stepper", {}, btn("A−", -1), value, btn("A+", 1));
 }
 
-function settingRow(label: string, control: HTMLElement, note?: string): HTMLElement {
-  return h("div.set-row", {}, h("div.set-text", {}, h("span.set-label", {}, label), note ? h("span.set-note", {}, note) : null), control);
+function settingRow(label: string, control: HTMLElement, note?: string, stacked = false): HTMLElement {
+  return h(
+    `div.set-row${stacked ? ".stacked" : ""}` as "div",
+    {},
+    h("div.set-text", {}, h("span.set-label", {}, label), note ? h("span.set-note", {}, note) : null),
+    control
+  );
 }
 
 function storageButton(): HTMLElement {
@@ -630,6 +637,7 @@ function openSettings(): void {
     {},
     h("h3.set-group", {}, "Keyboard"),
     settingRow("Keyboard", segmented("keyboard", [["custom", "Code"], ["system", "Phone"]]), "Code keyboard, or your phone's own keyboard with the arrow bar"),
+    settingRow("Letter layout", segmented("layout", letterLayouts.map((l) => [l.id, l.label] as [LetterLayout, string])), "QWERTY, German QWERTZ, French AZERTY or Colemak", true),
     settingRow("Key height", segmented("keySize", [["compact", "S"], ["normal", "M"], ["tall", "L"]])),
     settingRow("Shift symbols on keys", toggle("hints"), "The small symbol in each key's corner"),
     isNative || "vibrate" in navigator ? settingRow("Vibrate on key press", toggle("vibrate")) : null,
@@ -666,7 +674,8 @@ function openTips(): void {
       {},
       h("ul", {},
         tip("slide", "Put a finger on any key and slide to move the cursor. Turn on shift first to select."),
-        tip("hold", "Hold a key for more symbols, e.g. \" for ' and `, : for ;"),
+        tip("hold", "Hold a key for more symbols, e.g. \" for ' and `, : for ;. Hold a letter for accents like ä é ç."),
+        tip("layout", "Settings > Letter layout: QWERTY, QWERTZ, AZERTY or Colemak."),
         tip("shift", "Shows the corner symbol of each key: ? & ^ ~ | ' \\ ; $ @. Double-tap for caps lock."),
         tip("( ) [ ] { }", "Types both brackets. Selected text gets wrapped."),
         tip("tab", "Picks a suggestion, expands a shortcut, jumps to the next blank, or indents."),

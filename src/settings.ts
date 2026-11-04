@@ -1,3 +1,4 @@
+import type { LetterLayout } from "./keyboard/layout";
 import { loadJSON, saveJSON } from "./storage";
 
 export type KeyboardMode = "custom" | "system";
@@ -6,6 +7,8 @@ export type KeySize = "compact" | "normal" | "tall";
 export interface Settings {
   keyboard: KeyboardMode;
   keySize: KeySize;
+  /** Order of the letter keys. */
+  layout: LetterLayout;
   hints: boolean;
   vibrate: boolean;
   fontSize: number;
@@ -20,6 +23,7 @@ export interface Settings {
 export const defaultSettings: Settings = {
   keyboard: "custom",
   keySize: "normal",
+  layout: "qwerty",
   hints: true,
   vibrate: true,
   fontSize: 14,

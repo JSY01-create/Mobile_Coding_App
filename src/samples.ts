@@ -18,6 +18,8 @@ travel further. Turn on shift first to select text instead.
 - Shift shows the small corner symbol of each key:
   \`?  &  ^  ~  |  '  \\  ;  $  @\`
 - Double-tap shift for caps lock.
+- Hold a letter for its capital and accents (ä ö ü ß é ç ñ).
+  Settings > Letter layout switches to QWERTZ, AZERTY or Colemak.
 - \`()\` \`[]\` \`{}\` type both brackets. Selected text gets wrapped.
 - Tab jumps past a closing bracket or quote, or indents.
   Shift + tab outdents.

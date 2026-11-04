@@ -91,12 +91,13 @@ function pair(open: string, close: string, o: { span?: number; tone?: Tone } = {
   };
 }
 
-function letter(ch: string): KeyDef {
+function letter(ch: string, accents = ""): KeyDef {
   return {
     id: `key-${ch}`,
     label: ch,
     action: text(ch),
-    alts: [alt(ch.toUpperCase())],
+    // Long-press: the capital letter, then accented letters.
+    alts: [alt(ch.toUpperCase()), ...[...accents].map((a) => alt(a))],
     span: 2,
     tone: "letter",
     balloon: true,
@@ -114,7 +115,66 @@ function action(id: string, label: string, c: Cmd, o: Partial<KeyDef> = {}): Key
   return { id, label, action: cmd(c), span: 2, tone: "mod", ...o };
 }
 
-export const keyboardRows: RowDef[] = [
+export type LetterLayout = "qwerty" | "qwertz" | "azerty" | "colemak";
+
+export const letterLayouts: { id: LetterLayout; label: string }[] = [
+  { id: "qwerty", label: "QWERTY" },
+  { id: "qwertz", label: "QWERTZ" },
+  { id: "azerty", label: "AZERTY" },
+  { id: "colemak", label: "Colemak" },
+];
+
+/** Accented letters on long-press, most used first. */
+const ACCENTS: Record<string, string> = {
+  a: "äàáâãåæ", c: "çćč", e: "éèêëē", i: "íìîï", n: "ñń", o: "öóòôõøœ", s: "ßšś", u: "üúùû", y: "ýÿ", z: "žźż", l: "ł", g: "ğ",
+};
+/** French keyboards put these first. */
+const ACCENTS_FR: Record<string, string> = {
+  a: "àâäæáã", c: "çćč", e: "éèêëē", i: "îïíì", o: "ôöœóò", u: "ùûüú", y: "ÿý",
+};
+
+/** The three letter rows (20 columns each). The ( ) key goes wherever a row has room. */
+function letterRows(layout: LetterLayout): RowDef[] {
+  const accents = layout === "azerty" ? { ...ACCENTS, ...ACCENTS_FR } : ACCENTS;
+  const letters = (row: string) => row.split("").map((ch) => letter(ch, accents[ch]));
+  const parens = () => pair("(", ")", { span: 2 });
+  const shiftKey = () => action("shift", "shift", "shift", { icon: "shift", span: 3 });
+  const backspaceKey = () => action("backspace", "delete", "backspace", { icon: "backspace", span: 3, repeat: true });
+  switch (layout) {
+    case "qwertz":
+      return [
+        { cols: 20, keys: letters("qwertzuiop") },
+        { cols: 20, keys: [...letters("asdfghjkl"), parens()] },
+        { cols: 20, keys: [shiftKey(), ...letters("yxcvbnm"), backspaceKey()] },
+      ];
+    case "azerty":
+      return [
+        { cols: 20, keys: letters("azertyuiop") },
+        { cols: 20, keys: letters("qsdfghjklm") },
+        { cols: 20, keys: [shiftKey(), ...letters("wxcvbn"), parens(), backspaceKey()] },
+      ];
+    case "colemak":
+      return [
+        { cols: 20, keys: [...letters("qwfpgjluy"), parens()] },
+        { cols: 20, keys: letters("arstdhneio") },
+        { cols: 20, keys: [shiftKey(), ...letters("zxcvbkm"), backspaceKey()] },
+      ];
+    default:
+      return [
+        { cols: 20, keys: letters("qwertyuiop") },
+        { cols: 20, keys: [...letters("asdfghjkl"), parens()] },
+        { cols: 20, keys: [shiftKey(), ...letters("zxcvbnm"), backspaceKey()] },
+      ];
+  }
+}
+
+/** All key rows for a letter layout; the symbol, number and bottom rows are the same for every layout. */
+export function keyboardRowsFor(layout: LetterLayout): RowDef[] {
+  const [top, numbers, ...rest] = baseRows();
+  return [top, numbers, ...letterRows(layout), ...rest];
+}
+
+const baseRows = (): RowDef[] => [
   {
     cols: 11,
     keys: [
@@ -136,16 +196,6 @@ export const keyboardRows: RowDef[] = [
     keys: [
       ..."1234567890".split("").map(digit),
       sym("=", { shift: "==", alts: ["==", "===", "!=", "=>"] }),
-    ],
-  },
-  { cols: 20, keys: "qwertyuiop".split("").map(letter) },
-  { cols: 20, keys: [..."asdfghjkl".split("").map(letter), pair("(", ")", { span: 2 })] },
-  {
-    cols: 20,
-    keys: [
-      action("shift", "shift", "shift", { icon: "shift", span: 3 }),
-      ..."zxcvbnm".split("").map(letter),
-      action("backspace", "delete", "backspace", { icon: "backspace", span: 3, repeat: true }),
     ],
   },
   {
