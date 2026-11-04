@@ -22,15 +22,24 @@ export interface Handle {
   el: HTMLElement;
 }
 
+/**
+ * Menus, sheets, dialogs and the file panel. Only one is open at a time: opening one closes
+ * the others, and while one is open the top bar is covered (tapping it closes the open one).
+ */
 export class Overlays {
   private layers: Layer[] = [];
   private toastEl: HTMLElement;
   private toastTimer = 0;
+  private shield: HTMLElement;
 
-  constructor(private area: HTMLElement, private app: HTMLElement, private onAllClosed: () => void) {
+  constructor(private area: HTMLElement, private app: HTMLElement, header: HTMLElement, private onAllClosed: () => void) {
     this.toastEl = h("div.toast", { role: "status", "aria-live": "polite" });
     this.toastEl.hidden = true;
     area.append(this.toastEl);
+    this.shield = h("div.header-shield", { "aria-hidden": "true" });
+    this.shield.hidden = true;
+    this.shield.addEventListener("click", () => this.closeTop());
+    header.append(this.shield);
   }
 
   get isOpen(): boolean {
@@ -57,6 +66,8 @@ export class Overlays {
   }
 
   private push(el: HTMLElement, parent: HTMLElement, suspendKeyboard: boolean, onClose?: () => void): Handle {
+    // Whatever was open closes first, so menus never stack.
+    this.closeAll(true);
     const scrim = h("div.scrim");
     const layer: Layer = { el, scrim, suspendKeyboard, onClose };
     scrim.addEventListener("click", () => this.close(layer));
@@ -70,7 +81,7 @@ export class Overlays {
     return { el, close: () => this.close(layer) };
   }
 
-  private close(layer: Layer): void {
+  private close(layer: Layer, quiet = false): void {
     const i = this.layers.indexOf(layer);
     if (i < 0) return;
     this.layers.splice(i, 1);
@@ -78,7 +89,7 @@ export class Overlays {
     layer.scrim.remove();
     layer.onClose?.();
     this.syncKeyboard();
-    if (!this.layers.length) this.onAllClosed();
+    if (!this.layers.length && !quiet) this.onAllClosed();
   }
 
   /** Closes the top layer. Returns false when nothing was open. */
@@ -89,14 +100,14 @@ export class Overlays {
     return true;
   }
 
-  closeAll(): void {
-    while (this.closeTop()) {
-      // keep closing
-    }
+  /** Closes everything. `quiet` skips the "all closed" callback (used when another layer opens). */
+  closeAll(quiet = false): void {
+    for (let top = this.layers[this.layers.length - 1]; top; top = this.layers[this.layers.length - 1]) this.close(top, quiet);
   }
 
   private syncKeyboard(): void {
     this.app.classList.toggle("kb-suspended", this.layers.some((l) => l.suspendKeyboard));
+    this.shield.hidden = !this.layers.length;
   }
 
   sheet(o: SheetOptions): Handle {

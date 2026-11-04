@@ -11,7 +11,7 @@ import { FileStore, type FileRec } from "./files";
 import { Keyboard, type KeyboardHost } from "./keyboard/keyboard";
 import { EditorTarget, InputTarget, type Target } from "./keyboard/targets";
 import { writeClipboard } from "./keyboard/clipboard";
-import { allLanguages, detect, languageFor, loadLanguage, PLAIN, popularNames } from "./languages";
+import { allLanguages, detect, languageFor, loadLanguage, mainExtension, PLAIN, popularNames } from "./languages";
 import { settings, type Settings } from "./settings";
 import { fileLanguage, prepareFor, setCssProvider, setWorkspace } from "./snippets";
 import { h, icon, icons, kbInput, keepFocus, refreshKbInputs } from "./ui/dom";
@@ -48,7 +48,7 @@ const editorArea = h("main.editor-area", {}, editorHost, showKbBtn);
 const dock = h("div.kb-dock");
 app.append(header, editorArea, dock);
 
-const overlays = new Overlays(editorArea, app, () => {
+const overlays = new Overlays(editorArea, app, header, () => {
   if (!document.activeElement || document.activeElement === document.body) view.focus();
 });
 
@@ -184,6 +184,7 @@ const host: KeyboardHost = {
     return input ? new InputTarget(input) : editorTarget;
   },
   command(cmd) {
+    overlays.closeAll();
     if (cmd === "search") toggleSearch();
     else if (cmd === "hide") hideKeyboard();
   },
@@ -532,7 +533,7 @@ function openLanguagePicker(): void {
       list.append(h("div.lang-group", {}, "Popular"));
       for (const name of popularNames) {
         const l = allLanguages.find((x) => x.name === name);
-        if (l) list.append(row(l.name, l.name, l.extensions[0] ? `.${l.extensions[0]}` : undefined));
+        if (l) list.append(row(l.name, l.name, mainExtension(l)));
       }
       list.append(h("div.lang-group", {}, "All languages"));
     }
@@ -540,7 +541,7 @@ function openLanguagePicker(): void {
     let count = 0;
     for (const l of allLanguages) {
       if (!match(l.name, l.extensions)) continue;
-      list.append(row(l.name, l.name, l.extensions[0] ? `.${l.extensions[0]}` : undefined));
+      list.append(row(l.name, l.name, mainExtension(l)));
       count++;
     }
     if (q && !count) list.append(h("p.empty", {}, `No language matches "${filter.value}".`));

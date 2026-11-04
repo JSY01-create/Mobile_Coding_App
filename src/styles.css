@@ -106,6 +106,20 @@ button:focus-visible,
   flex: none;
 }
 
+/* Covers the top bar while a menu or dialog is open; a tap closes it. */
+.topbar {
+  position: relative;
+  /* Below the file panel and dialogs, so the shield never covers them. */
+  z-index: 1;
+}
+
+.header-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  background: rgba(0, 0, 0, 0.5);
+}
+
 .icon-btn {
   display: grid;
   place-items: center;

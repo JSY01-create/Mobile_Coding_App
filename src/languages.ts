@@ -53,3 +53,18 @@ export function extTag(name: string): string {
   const ext = dot > 0 ? name.slice(dot + 1) : "";
   return (ext || "txt").slice(0, 4).toLowerCase();
 }
+
+/** The extension people know a language by, e.g. ".py" for Python (not "BUILD"), or undefined. */
+export function mainExtension(desc: LanguageDescription): string | undefined {
+  const name = desc.name.toLowerCase();
+  let best: string | undefined;
+  let bestScore = -1;
+  for (const ext of desc.extensions) {
+    const score = (ext === ext.toLowerCase() ? 2 : 0) + (name.startsWith(ext[0]?.toLowerCase() ?? "") ? 1 : 0);
+    if (score > bestScore) {
+      best = ext;
+      bestScore = score;
+    }
+  }
+  return best ? `.${best}` : undefined;
+}
