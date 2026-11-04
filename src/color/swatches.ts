@@ -117,10 +117,18 @@ const theme = EditorView.baseTheme({
   },
   // A bigger area to tap than the square itself.
   ".cm-color-swatch::after": { content: '""', position: "absolute", inset: "-9px -6px" },
+  // The "pick a color" dot for an empty rgb(): half the size of a color square.
   ".cm-color-swatch.cm-color-new": {
+    width: "0.4em",
+    height: "0.4em",
+    verticalAlign: "0.14em",
+    marginRight: "0.35em",
     background: "conic-gradient(#ff3b30, #ffcc00, #34c759, #32ade6, #5856d6, #ff2d55, #ff3b30)",
     borderRadius: "50%",
+    boxShadow: "0 0 0 1px rgba(255,255,255,0.35)",
   },
+  // Same easy tap area as the bigger squares.
+  ".cm-color-swatch.cm-color-new::after": { inset: "-11px -9px" },
 });
 
 /** Color squares for CSS, <style> blocks and style="" attributes. */
