@@ -19,6 +19,9 @@ import { h, icon, icons, kbInput, keepFocus, refreshKbInputs } from "./ui/dom";
 import { menuList, Overlays } from "./ui/overlay";
 import { Explorer } from "./ui/explorer";
 import { Preview, type RunTarget } from "./run/preview";
+import { colorsIn, formatOf, parseColor } from "./color/color";
+import { openColorPicker } from "./color/picker";
+import { colorRangeAt, pickColorAt, setColorOpener } from "./color/swatches";
 import { basename, dirname } from "./paths";
 import { isNative, onBackButton } from "./native";
 import { appWorkspace, chooseWorkspace, copyWorkspace, phoneWorkspace, requestPhoneStorage, type Workspace } from "./workspace";
@@ -187,6 +190,7 @@ const host: KeyboardHost = {
   command(cmd) {
     overlays.closeAll();
     if (cmd === "search") toggleSearch();
+    else if (cmd === "color") colorAtCursor();
     else if (cmd === "hide") hideKeyboard();
   },
   vibrate: () => settings.value.vibrate,
@@ -429,6 +433,31 @@ function offerPhoneStorage(): void {
     void usePhoneStorage();
   });
   later.addEventListener("click", () => sheet.close());
+}
+
+// ---- Color picker ------------------------------------------------------------------
+
+setColorOpener((v, from, to, text) => {
+  const initial = text ? parseColor(text) : null;
+  openColorPicker({
+    overlays,
+    initial,
+    // An empty rgb() or hsl() keeps its kind; anything else keeps the format it was written in.
+    format: formatOf(text),
+    upper: /^#[0-9A-F]+$/.test(text) && /[A-F]/.test(text),
+    used: colorsIn(v.state.doc.toString()),
+    onPick(value) {
+      v.dispatch({ changes: { from, to, insert: value }, selection: { anchor: from + value.length }, scrollIntoView: true, userEvent: "input.complete" });
+      v.focus();
+    },
+  });
+});
+
+/** Hold # then "color": edits the color at the cursor, or inserts a new one. */
+function colorAtCursor(): void {
+  const sel = view.state.selection.main;
+  const range = sel.empty ? colorRangeAt(view.state, sel.head) : { from: sel.from, to: sel.to };
+  pickColorAt(view, range?.from ?? sel.head, range?.to ?? sel.head);
 }
 
 // ---- Run ---------------------------------------------------------------------------
@@ -681,6 +710,7 @@ function openTips(): void {
         tip("tab", "Picks a suggestion, expands a shortcut, jumps to the next blank, or indents."),
         tip("copy", "Hold for cut, select line, select all."),
         tip("pinch", "Zoom the code in or out."),
+        tip("color", "Tap the square next to a CSS color for a color picker. Hold # for \"color\" anywhere."),
         tip("\u25B6 run", "Runs the file: HTML opens a live preview with a console and Inspect; JavaScript and Python run too."),
       ),
       h("h3.set-group", {}, "Shortcuts"),

@@ -92,6 +92,16 @@ Mobile browsers have no developer tools, so the preview brings its own:
   styles, network, storage, sources.
 - **Desktop width** shows the page at 1280 px, scaled to fit.
 
+## Color picker
+
+Colors in CSS (`#hex`, `rgb()`, `rgba()`, `hsl()`, names like `red`; also in
+`<style>` and `style=""`) get a small color square, like in VS Code. Tap it to
+pick a new color: drag the color area, hue and opacity sliders, switch between
+HEX, RGB and HSL, or tap a color already used in the file. An empty `rgb()`
+shows a rainbow square to fill it in. "pick color" also leads the suggestions
+for color properties, and holding `#` → "color" picks a color anywhere (JS
+strings, HTML attributes).
+
 ## Languages
 
 Syntax highlighting for 140+ languages (CodeMirror 6), picked from the file
@@ -197,5 +207,6 @@ npm run typecheck
 | `src/snippets/paths.ts` | File path suggestions |
 | `src/snippets/after.ts`, `cssValues.ts`, `classes.ts` | `=""` after attributes, CSS values per property, class names from CSS |
 | `src/run/` | Run: preview page, console, Python, serving project files |
+| `src/color/` | Color squares in CSS and the color picker |
 | `src/native.ts` | Android app extras: clipboard, share sheet, back button, haptics |
 | `android/` | Android project (Capacitor) |

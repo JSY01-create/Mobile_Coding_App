@@ -35,6 +35,11 @@ live preview with a console under it (errors, console.log, and
 a command line), and Inspect shows the page's elements, styles
 and network. JavaScript and Python files run too.
 
+## Colors
+
+Colors in CSS show a small square. Tap it for a color picker.
+Hold # and pick "color" to add a color anywhere.
+
 ## Suggestions and shortcuts
 
 Suggestions appear as you type. Tap one, or press tab or return.

@@ -13,7 +13,7 @@ export type Cmd =
   | "shift" | "backspace" | "tab" | "outdent" | "enter"
   | "undo" | "redo" | "copy" | "cut" | "paste" | "selectAll" | "selectLine"
   | "left" | "right" | "up" | "down" | "home" | "end"
-  | "comment" | "search" | "hide";
+  | "comment" | "search" | "hide" | "color";
 
 export type Action =
   | { kind: "text"; text: string }
@@ -113,6 +113,12 @@ function digit(d: string): KeyDef {
 
 function action(id: string, label: string, c: Cmd, o: Partial<KeyDef> = {}): KeyDef {
   return { id, label, action: cmd(c), span: 2, tone: "mod", ...o };
+}
+
+/** The # key; holding it also offers the color picker. */
+function hashKey(): KeyDef {
+  const key = sym("#", { shift: "@", alts: ["@", "$", "`"] });
+  return { ...key, span: 4, tone: "mod", alts: [...(key.alts ?? []), alt("color", cmd("color"))] };
 }
 
 export type LetterLayout = "qwerty" | "qwertz" | "azerty" | "colemak";
@@ -216,7 +222,7 @@ const baseRows = (): RowDef[] => [
     keys: [
       action("undo", "undo", "undo", { span: 4, repeat: true, word: true }),
       action("redo", "redo", "redo", { span: 4, repeat: true, word: true }),
-      { ...sym("#", { shift: "@", alts: ["@", "$", "`"] }), span: 4, tone: "mod" },
+      hashKey(),
       action("copy", "copy", "copy", {
         span: 4,
         word: true,

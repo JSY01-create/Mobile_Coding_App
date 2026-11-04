@@ -1,5 +1,6 @@
 // Values that fit the CSS property being written: "display: " -> flex, grid, block...
 import type { Completion, CompletionSource } from "@codemirror/autocomplete";
+import { pickColorAt } from "../color/swatches";
 import { syntaxTree } from "@codemirror/language";
 
 const align = "stretch flex-start flex-end center baseline start end self-start self-end";
@@ -134,5 +135,14 @@ export const cssValueSource: CompletionSource = (ctx) => {
   // Multi-word values such as "1px solid" or "repeat(3, 1fr)" stay together.
   for (const v of list.match(/repeat\([^)]*\)\)?|minmax\([^)]*\)|"[^"]+"|\d+ \/ \d+|[^\s]+/g) ?? []) add(v, 2);
   for (const v of GLOBAL.split(" ")) add(v, -1);
+  if (COLOR_PROPS.test(prop)) {
+    options.unshift({
+      label: "pick color",
+      detail: "opens the color picker",
+      type: "color",
+      boost: 99,
+      apply: (view, _c, from, to) => pickColorAt(view, from, to),
+    });
+  }
   return { from: ctx.pos - word.length, options, validFor: /^[\w#().-]*$/ };
 };
