@@ -149,6 +149,9 @@ function emmetAt(state: EditorState, pos: number, ctx: Context, explicit: boolea
     const declStart = Math.max(before.lastIndexOf(";"), before.lastIndexOf("{"), before.lastIndexOf("}")) + 1;
     if (before.slice(declStart).trim() !== abbr) return null;
     if (!/^[a-z@-]/i.test(abbr)) return null;
+    // Typing a real property name ("font-fa" for font-family): leave it to the property suggestions,
+    // instead of Emmet guessing "font: fa;".
+    if (startsCssProperty(abbr)) return null;
   } else if (!explicit) {
     const first = abbr.match(/^[a-zA-Z][\w-]*(?::[\w-]+)*/)?.[0];
     if (first ? !isKnownMarkup(first) : !/^[.#!([]/.test(abbr)) return null;
@@ -173,10 +176,28 @@ function emmetAt(state: EditorState, pos: number, ctx: Context, explicit: boolea
   };
 }
 
-function emmetDetail(abbr: string, preview: string): string {
-  if (abbr === "!" || abbr === "html:5" || abbr === "doc") return "HTML page";
-  const first = preview.split("\n")[0];
-  return first.length > 34 ? first.slice(0, 33) + "…" : first;
+let cssProperties: string[] | null = null;
+
+/** True when some CSS property name starts with `text` (e.g. "font-fa", "pos", "color"). */
+function startsCssProperty(text: string): boolean {
+  if (!cssProperties) {
+    const names = new Set<string>();
+    const style = document.documentElement.style as unknown as Record<string, unknown>;
+    for (const key in style) {
+      if (typeof style[key] !== "string" || !/^[a-z]/i.test(key)) continue;
+      names.add(key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/^webkit-/, ""));
+    }
+    cssProperties = [...names];
+  }
+  const t = text.toLowerCase();
+  return cssProperties.some((p) => p.startsWith(t));
+}
+
+/** What the suggestion shows: the result of the abbreviation, so it never just repeats what was typed. */
+function emmetLabel(abbr: string, preview: string): string {
+  if (abbr === "!" || abbr === "html:5" || abbr === "doc") return "HTML page (<!DOCTYPE html>\u2026)";
+  const flat = preview.replace(/\n\s*/g, "");
+  return flat.length > 40 ? flat.slice(0, 39) + "\u2026" : flat;
 }
 
 const emmetSource: CompletionSource = async (ctx: CompletionContext): Promise<CompletionResult | null> => {
@@ -186,17 +207,21 @@ const emmetSource: CompletionSource = async (ctx: CompletionContext): Promise<Co
   if (ctx.aborted) return null;
   const exp = emmetAt(ctx.state, ctx.pos, context, ctx.explicit);
   if (!exp) return null;
+  const multiline = exp.preview.includes("\n");
   const option: Completion = {
-    label: exp.abbreviation,
-    detail: emmetDetail(exp.abbreviation, exp.preview),
+    label: emmetLabel(exp.abbreviation, exp.preview),
+    detail: "Emmet",
     type: "emmet",
     boost: 99,
-    info: () => {
-      const pre = document.createElement("pre");
-      pre.className = "cm-emmet-preview";
-      pre.textContent = exp.preview;
-      return pre;
-    },
+    // Longer results get a full preview next to the list.
+    info: multiline
+      ? () => {
+          const pre = document.createElement("pre");
+          pre.className = "cm-emmet-preview";
+          pre.textContent = exp.preview;
+          return pre;
+        }
+      : undefined,
     apply: snippet(exp.template),
   };
   return { from: exp.from, to: exp.to, options: [option], filter: false };
