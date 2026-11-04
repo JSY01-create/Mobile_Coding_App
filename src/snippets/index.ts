@@ -5,6 +5,7 @@ import type { EditorView } from "@codemirror/view";
 import { contextForLanguage, snippetsByContext, type Context, type SnippetDef } from "./library";
 import { classSource } from "./classes";
 import { cssValueSource } from "./cssValues";
+import { jsGlobalSource } from "./jsGlobals";
 import { pathSource } from "./paths";
 
 export { afterCompletion } from "./after";
@@ -249,13 +250,21 @@ const shortcutSource: CompletionSource = (ctx) => {
   if (!options.length) return null;
   const word = ctx.matchBefore(/[A-Za-z_][\w]*/);
   if (!word && !ctx.explicit) return null;
+  // After a dot (console.l, slots.fo) only members make sense, not shortcuts.
+  if (/\.\s*$/.test(ctx.state.sliceDoc(Math.max(0, (word?.from ?? ctx.pos) - 20), word?.from ?? ctx.pos))) return null;
   // Don't offer shortcuts in comments or strings.
   const name = syntaxTree(ctx.state).resolveInner(ctx.pos, -1).name;
   if (/Comment|String/.test(name)) return null;
   return { from: word?.from ?? ctx.pos, options, validFor: /^\w*$/ };
 };
 
-export const shortcutSources: CompletionSource[] = [emmetSource, shortcutSource, pathSource, classSource, cssValueSource];
+/** Browser objects in JavaScript (also inside HTML <script>). */
+const browserSource: CompletionSource = (ctx) => {
+  const context = contextAt(ctx.state, ctx.pos);
+  return context === "js" || context === "jsx" || context === "ts" || context === "tsx" ? jsGlobalSource(ctx) : null;
+};
+
+export const shortcutSources: CompletionSource[] = [emmetSource, shortcutSource, pathSource, classSource, cssValueSource, browserSource];
 
 /**
  * Tab key: expand a shortcut (or, with `emmetToo`, an Emmet abbreviation) right before the cursor.

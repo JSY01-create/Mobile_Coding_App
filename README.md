@@ -109,6 +109,13 @@ extension or chosen from the language button. Suggestions appear as you type:
 language-aware ones for JavaScript, TypeScript, Python, HTML, CSS, SQL and
 others, and words from the file for the rest.
 
+JavaScript (also inside HTML `<script>`) suggests the browser's own objects,
+read from a clean hidden page so they match the real browser: globals
+(`document`, `console`, `setTimeout`…), members after a dot (`document.`,
+`console.`, `Math.`), event names inside `addEventListener("`, event members for
+`event`/`e` parameters, and members of variables made with `querySelector`,
+`querySelectorAll`, strings, arrays and `new …`.
+
 ## Shortcuts
 
 Type a shortcut and pick it from the suggestions (tap, tab or return). Blanks
@@ -205,6 +212,7 @@ npm run typecheck
 | `android/app/src/main/java/.../StorageAccessPlugin.java` | Asks Android for file access |
 | `src/ui/explorer.ts` | File tree, create/rename/move/delete, zip import and export |
 | `src/snippets/paths.ts` | File path suggestions |
+| `src/snippets/jsGlobals.ts` | Browser objects in JavaScript suggestions |
 | `src/snippets/after.ts`, `cssValues.ts`, `classes.ts` | `=""` after attributes, CSS values per property, class names from CSS |
 | `src/run/` | Run: preview page, console, Python, serving project files |
 | `src/color/` | Color squares in CSS and the color picker |
