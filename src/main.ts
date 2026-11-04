@@ -16,6 +16,7 @@ import { settings, type Settings } from "./settings";
 import { fileLanguage, prepareFor } from "./snippets";
 import { h, icon, icons, kbInput, keepFocus, refreshKbInputs } from "./ui/dom";
 import { menuList, Overlays } from "./ui/overlay";
+import { isNative, nativeShareFile, onBackButton } from "./native";
 
 const files = new FileStore();
 
@@ -366,6 +367,14 @@ function duplicateFile(file: FileRec): void {
 
 async function exportFile(file: FileRec): Promise<void> {
   if (file.id === currentId) flushSave();
+  if (isNative) {
+    try {
+      await nativeShareFile(file.name, file.content);
+    } catch {
+      overlays.toast(`Couldn't save ${file.name}.`);
+    }
+    return;
+  }
   const blob = new Blob([file.content], { type: "text/plain" });
   try {
     const shared = new File([blob], file.name, { type: "text/plain" });
@@ -589,7 +598,7 @@ function openSettings(): void {
     settingRow("Keyboard", segmented("keyboard", [["custom", "Code"], ["system", "Phone"]]), "Code keyboard, or your phone's own keyboard with the arrow bar"),
     settingRow("Key height", segmented("keySize", [["compact", "S"], ["normal", "M"], ["tall", "L"]])),
     settingRow("Shift symbols on keys", toggle("hints"), "The small symbol in each key's corner"),
-    "vibrate" in navigator ? settingRow("Vibrate on key press", toggle("vibrate")) : null,
+    isNative || "vibrate" in navigator ? settingRow("Vibrate on key press", toggle("vibrate")) : null,
     h("h3.set-group", {}, "Editor"),
     settingRow("Text size", stepper("fontSize", 9, 28, "px"), "You can also pinch the code"),
     settingRow("Indent", segmented("tabSize", [[2, "2"], [4, "4"], [8, "8"]]), "Spaces per tab"),
@@ -678,7 +687,19 @@ document.addEventListener("visibilitychange", () => {
 openFile(currentId);
 if (settings.value.keyboard === "custom") view.focus();
 
-if (!__SINGLE_FILE__ && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+// Android back button: close the top menu, then find, then leave the app.
+onBackButton(() => {
+  if (overlays.closeTop()) return true;
+  if (searchPanelOpen(view.state)) {
+    closeSearchPanel(view);
+    view.focus();
+    return true;
+  }
+  return false;
+});
+
+// The Android app has its files built in, so it needs no offline cache.
+if (!__SINGLE_FILE__ && !isNative && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("./sw.js").catch(() => {
     // Offline support is optional.

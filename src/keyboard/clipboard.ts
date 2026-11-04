@@ -1,9 +1,12 @@
+import { nativeCopy, nativePaste } from "../native";
+
 // The system clipboard is not always reachable (permissions, embedded
 // frames). An in-app copy keeps copy and paste working inside the editor.
 let internal = "";
 
 export async function writeClipboard(text: string): Promise<boolean> {
   internal = text;
+  if (await nativeCopy(text)) return true;
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -13,6 +16,8 @@ export async function writeClipboard(text: string): Promise<boolean> {
 }
 
 export async function readClipboard(): Promise<string> {
+  const native = await nativePaste();
+  if (native) return native;
   try {
     const text = await navigator.clipboard.readText();
     if (text) return text;

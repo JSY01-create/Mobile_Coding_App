@@ -1,3 +1,4 @@
+import { isNative, nativeTap } from "../native";
 import { h } from "../ui/dom";
 import { accessoryRow, keyboardRows, keyIcons, type Action, type Cmd, type KeyDef, type RowDef } from "./layout";
 import type { Target } from "./targets";
@@ -429,7 +430,12 @@ export class Keyboard {
   }
 
   private buzz(): void {
-    if (this.host.vibrate() && "vibrate" in navigator) {
+    if (!this.host.vibrate()) return;
+    if (isNative) {
+      nativeTap();
+      return;
+    }
+    if ("vibrate" in navigator) {
       try {
         navigator.vibrate(5);
       } catch {

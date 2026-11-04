@@ -68,7 +68,41 @@ to fill in are tab stops: press tab to go to the next one.
 Inside an HTML file, CSS shortcuts work in `<style>` and JavaScript ones in
 `<script>`. Add your own in `src/snippets/library.ts`.
 
-## Put it on your phone
+## Android app (APK)
+
+Every push builds an APK and posts it as the **latest-apk** release:
+
+**https://github.com/JSY01-create/Mobile_Coding_App/releases/download/latest-apk/thumbcode.apk**
+
+Open that link on the phone, then open the downloaded file. Android asks once
+to allow installs from your browser or Files app. New versions install over
+the old one and keep your files.
+
+The app has the editor built in, so it works offline. Inside the app, copy and
+paste use the phone's clipboard, "Save to device" opens the share sheet, and
+the back button closes menus.
+
+Build it yourself (needs JDK 21 and the Android SDK):
+
+```sh
+npm run apk   # APK in android/app/build/outputs/apk/release/app-release.apk
+```
+
+### Signing
+
+Android only installs an update over an app signed with the same key. The key
+is never stored in git:
+
+- Local builds read it from `android/keystore.properties` (ignored by git):
+  `storeFile`, `storePassword`, `keyAlias`, `keyPassword`.
+- The GitHub workflow reads it from two repository secrets:
+  `ANDROID_KEYSTORE_BASE64` (the key file in base64) and
+  `ANDROID_KEYSTORE_PASSWORD`, with the key alias `thumbcode`.
+- Without a key, the APK is signed with a throwaway key. It installs fine, but
+  the next build can't update it: you have to uninstall first, which deletes
+  the files saved in the app.
+
+## Put it on your phone as a web app
 
 1. In the repository settings, open **Pages** and set **Source** to
    **GitHub Actions**.
@@ -98,3 +132,5 @@ npm run typecheck
 | `src/snippets/index.ts` | Emmet and shortcut suggestions, tab expansion |
 | `src/editor.ts`, `src/theme.ts` | CodeMirror setup, colors |
 | `src/main.ts` | App shell: files, menus, settings |
+| `src/native.ts` | Android app extras: clipboard, share sheet, back button, haptics |
+| `android/` | Android project (Capacitor) |

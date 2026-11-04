@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build APK
+        working-directory: android
+        env:
+          # Optional repository secrets with your signing key. Without them the APK is
+          # signed with a throwaway key, so each new build needs a reinstall.
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          THUMBCODE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          THUMBCODE_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          THUMBCODE_KEY_ALIAS: thumbcode
+        run: |
+          # Each build gets a higher version number so it installs over the last one.
+          export THUMBCODE_BUILD=$((GITHUB_RUN_NUMBER + 1))
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export THUMBCODE_KEYSTORE="$RUNNER_TEMP/release.keystore"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret, so this APK uses a throwaway signing key."
+          fi
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../thumbcode.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thumbcode-apk
+          path: thumbcode.apk
+      - name: Publish to the "latest-apk" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-apk --yes --cleanup-tag || true
+          gh release create latest-apk thumbcode.apk \
+            --target "$GITHUB_SHA" \
+            --title "Thumbcode for Android (latest)" \
+            --notes "Built from ${GITHUB_SHA::7}. Download thumbcode.apk on your phone and open it to install. Android asks once to allow installs from your browser or Files app." \
+            --latest
