@@ -205,9 +205,22 @@ showKbBtn.addEventListener("click", () => {
   showKeyboard();
   view.focus();
 });
-view.dom.addEventListener("pointerdown", () => {
-  if (settings.value.keyboard === "custom") showKeyboard();
-});
+// A quick tap on the code brings the hidden keyboard back. Scrolling (the browser
+// cancels the pointer when it starts panning), dragging and long-press selection don't.
+{
+  let tap: { id: number; x: number; y: number; t: number } | null = null;
+  view.dom.addEventListener("pointerdown", (e) => {
+    tap = e.isPrimary ? { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+  });
+  view.dom.addEventListener("pointercancel", () => (tap = null));
+  view.dom.addEventListener("pointerup", (e) => {
+    const start = tap;
+    tap = null;
+    if (!start || e.pointerId !== start.id || settings.value.keyboard !== "custom") return;
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (moved < 10 && e.timeStamp - start.t < 450) showKeyboard();
+  });
+}
 document.addEventListener("focusin", queueRefresh);
 document.addEventListener("selectionchange", queueRefresh);
 
