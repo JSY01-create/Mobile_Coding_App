@@ -13,10 +13,11 @@ import { EditorTarget, InputTarget, type Target } from "./keyboard/targets";
 import { writeClipboard } from "./keyboard/clipboard";
 import { allLanguages, detect, languageFor, loadLanguage, PLAIN, popularNames } from "./languages";
 import { settings, type Settings } from "./settings";
-import { fileLanguage, prepareFor, setWorkspace } from "./snippets";
+import { fileLanguage, prepareFor, setCssProvider, setWorkspace } from "./snippets";
 import { h, icon, icons, kbInput, keepFocus, refreshKbInputs } from "./ui/dom";
 import { menuList, Overlays } from "./ui/overlay";
 import { Explorer } from "./ui/explorer";
+import { Preview, type RunTarget } from "./run/preview";
 import { basename, dirname } from "./paths";
 import { isNative, onBackButton } from "./native";
 import { appWorkspace, chooseWorkspace, copyWorkspace, phoneWorkspace, requestPhoneStorage, type Workspace } from "./workspace";
@@ -38,7 +39,8 @@ const titleBtn = h("button.file-title", { type: "button", "aria-label": "Rename 
 const langBtn = h("button.lang-pill", { type: "button", "aria-label": "Change language" }, h("span.lang-name"), icon(icons.chevronDown, { size: 14 }));
 const filesBtn = h("button.icon-btn", { type: "button", "aria-label": "Files" }, icon(icons.menu));
 const moreBtn = h("button.icon-btn", { type: "button", "aria-label": "More" }, icon(icons.more));
-const header = h("header.topbar", {}, filesBtn, titleBtn, langBtn, moreBtn);
+const runBtn = h("button.icon-btn.run-btn", { type: "button", "aria-label": "Run", title: "Run" }, icon(icons.play, { size: 22 }));
+const header = h("header.topbar", {}, filesBtn, titleBtn, runBtn, langBtn, moreBtn);
 
 const editorHost = h("div.editor-host");
 const showKbBtn = keepFocus(h("button.show-kb", { type: "button", "aria-label": "Show keyboard" }, icon(icons.keyboard, { size: 22 })));
@@ -345,6 +347,11 @@ const explorer = new Explorer({
 });
 
 setWorkspace({ files: () => files.files.map((f) => f.name), current: () => files.get(currentId)?.name ?? "" });
+setCssProvider(async () => {
+  const css = files.files.filter((f) => /\.(css|scss|less)$/i.test(f.name) && !f.binary).slice(0, 40);
+  const loaded = await Promise.all(css.map((f) => files.ensureContent(f.id)));
+  return loaded.map((f) => f?.content ?? "");
+});
 
 /** Re-reads the folder so files added by other apps (Files, Gallery...) show up. */
 async function refreshFiles(): Promise<void> {
@@ -420,6 +427,70 @@ function offerPhoneStorage(): void {
   });
   later.addEventListener("click", () => sheet.close());
 }
+
+// ---- Run ---------------------------------------------------------------------------
+
+const preview = new Preview({
+  get files() {
+    return files;
+  },
+  openAt(path, line) {
+    const f = files.byPath(path);
+    if (!f) return;
+    void openFile(f.id).then(() => {
+      if (line && line <= view.state.doc.lines) {
+        const at = view.state.doc.line(line).from;
+        view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+      }
+      view.focus();
+    });
+  },
+  onClose() {
+    if (settings.value.keyboard === "custom") view.focus();
+  },
+});
+app.append(preview.el);
+
+/** The page that uses a script or stylesheet: an HTML file next to it (or above) that mentions it. */
+async function pageFor(path: string, mustMention: boolean): Promise<string | null> {
+  const name = basename(path);
+  for (let dir = dirname(path); ; dir = dirname(dir)) {
+    const pages = files.files
+      .filter((f) => /\.html?$/i.test(f.name) && dirname(f.name) === dir)
+      .sort((a, b) => Number(basename(b.name) === "index.html") - Number(basename(a.name) === "index.html"));
+    for (const page of pages) {
+      const text = (await files.ensureContent(page.id))?.content ?? "";
+      if (text.includes(name)) return page.name;
+    }
+    if (!mustMention && pages.length) return pages[0].name;
+    if (!dir) return null;
+  }
+}
+
+async function runCurrent(): Promise<void> {
+  flushSave();
+  const file = files.get(currentId);
+  if (!file) return;
+  const ext = file.name.slice(file.name.lastIndexOf(".") + 1).toLowerCase();
+  let target: RunTarget | null = null;
+  if (ext === "html" || ext === "htm") target = { kind: "html", path: file.name };
+  else if (ext === "py") target = { kind: "python", path: file.name };
+  else if (ext === "js" || ext === "mjs" || ext === "cjs") {
+    const page = await pageFor(file.name, true);
+    target = page ? { kind: "html", path: page } : { kind: "js", path: file.name };
+  } else if (ext === "css" || ext === "scss" || ext === "less") {
+    const page = await pageFor(file.name, false);
+    if (page) target = { kind: "html", path: page };
+    else overlays.toast("Add an HTML page that links this stylesheet, then run it.", 3000);
+  } else if (ext === "ts" || ext === "tsx" || ext === "jsx") {
+    overlays.toast("TypeScript and JSX can't run here yet. HTML, JavaScript and Python can.", 3200);
+  } else {
+    overlays.toast(`.${ext} files can't run here. HTML, JavaScript and Python can.`, 3000);
+  }
+  if (target) await preview.open(target);
+}
+
+runBtn.addEventListener("click", () => void runCurrent());
 
 // ---- Language picker -----------------------------------------------------------
 
@@ -600,6 +671,7 @@ function openTips(): void {
         tip("tab", "Picks a suggestion, expands a shortcut, jumps to the next blank, or indents."),
         tip("copy", "Hold for cut, select line, select all."),
         tip("pinch", "Zoom the code in or out."),
+        tip("\u25B6 run", "Runs the file: HTML opens a live preview with a console and Inspect; JavaScript and Python run too."),
       ),
       h("h3.set-group", {}, "Shortcuts"),
       h("p", {}, "Type a shortcut, then tap it in the list or press tab. Each blank is a stop: press tab to go to the next one."),
@@ -638,6 +710,7 @@ function openMenu(): void {
         overlays.toast("File copied");
       }) },
       null,
+      { label: "Run", icon: icons.play, hint: basename(file.name), run: run(() => void runCurrent()) },
       { label: "Find and replace", icon: icons.search, run: run(() => openSearchPanel(view)) },
       { label: "Rename or move file", icon: icons.pencil, run: run(() => void explorer.renameFile(file)) },
       { label: "Settings", icon: icons.gear, run: run(openSettings) },
@@ -688,6 +761,10 @@ void start();
 // Android back button: close the top menu, then find, then leave the app.
 onBackButton(() => {
   if (overlays.closeTop()) return true;
+  if (preview.isOpen) {
+    preview.close();
+    return true;
+  }
   if (searchPanelOpen(view.state)) {
     closeSearchPanel(view);
     view.focus();

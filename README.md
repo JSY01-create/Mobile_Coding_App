@@ -62,6 +62,31 @@ The menu at the top left opens the file tree, like the Explorer in VS Code.
   `import … from "./…"`, `require("./…")`, CSS `url(…)` and Markdown links,
   suggestions list the project's files with the right relative path.
 
+## Run your code
+
+The green ▶ in the top bar runs the open file.
+
+- **HTML** opens a live preview of the page. CSS, scripts, ES module imports,
+  images and `fetch()` load from the project's folders as if from a web server
+  (in the Android app, Capacitor's local server reads them from storage; in the
+  browser, the service worker serves them). Links to other pages of the project
+  open in the preview. Running a `.css` or `.js` file opens the page that uses it.
+- **JavaScript** files that no page uses run on their own.
+- **Python** runs on the phone with [Pyodide](https://pyodide.org) (Python 3.14).
+  The first run downloads it (about 10 MB). Other `.py` files and small data
+  files in the project can be imported and opened, `input()` asks with a dialog,
+  and packages such as numpy load when imported.
+
+Mobile browsers have no developer tools, so the preview brings its own:
+
+- **Console** under the page: `console.log/info/warn/error`, uncaught errors and
+  failed loads with file and line (tap to jump to the code), expandable objects,
+  and a command line that runs JavaScript in the page (or Python after a Python
+  run).
+- **Inspect** adds [Eruda](https://github.com/liriliri/eruda): elements and
+  styles, network, storage, sources.
+- **Desktop width** shows the page at 1280 px, scaled to fit.
+
 ## Languages
 
 Syntax highlighting for 140+ languages (CodeMirror 6), picked from the file
@@ -165,5 +190,7 @@ npm run typecheck
 | `android/app/src/main/java/.../StorageAccessPlugin.java` | Asks Android for file access |
 | `src/ui/explorer.ts` | File tree, create/rename/move/delete, zip import and export |
 | `src/snippets/paths.ts` | File path suggestions |
+| `src/snippets/after.ts`, `cssValues.ts`, `classes.ts` | `=""` after attributes, CSS values per property, class names from CSS |
+| `src/run/` | Run: preview page, console, Python, serving project files |
 | `src/native.ts` | Android app extras: clipboard, share sheet, back button, haptics |
 | `android/` | Android project (Capacitor) |

@@ -22,7 +22,7 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import type { Settings } from "./settings";
-import { fileLanguage, shortcutSources } from "./snippets";
+import { afterCompletion, fileLanguage, shortcutSources } from "./snippets";
 import { editorTheme, highlightStyle } from "./theme";
 import { createSearchPanel } from "./ui/search";
 
@@ -104,6 +104,7 @@ export function createState(doc: string, s: Settings, language: Extension, hooks
       parts.brackets.of(p.brackets),
       parts.complete.of(p.complete),
       parts.input.of(p.input),
+      afterCompletion,
       EditorView.updateListener.of(hooks.onUpdate),
     ],
   });

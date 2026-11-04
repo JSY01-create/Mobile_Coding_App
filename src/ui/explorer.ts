@@ -304,7 +304,7 @@ export class Explorer {
 
   /** Shows an image (or details for other non-text files) with its actions. */
   async preview(file: FileRec): Promise<void> {
-    const body = h("div.preview");
+    const body = h("div.img-preview");
     const info = h("p.sheet-note", {}, `${dirname(file.name) ? dirname(file.name) + "/ · " : ""}${formatSize(file.size)}`);
     let url = "";
     if (IMAGE_EXT.test(file.name)) {

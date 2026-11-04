@@ -31,6 +31,11 @@ export class Workspace {
     return path ? `${this.root}/${path}` : this.root;
   }
 
+  /** file:// address of the workspace folder (Android), for serving files to the preview. */
+  async rootUri(): Promise<string> {
+    return (await Filesystem.getUri({ path: this.root, directory: this.directory })).uri;
+  }
+
   async ensureRoot(): Promise<void> {
     try {
       await Filesystem.mkdir({ path: this.root, directory: this.directory, recursive: true });

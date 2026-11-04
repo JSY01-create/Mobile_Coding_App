@@ -42,9 +42,20 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Files of the project being previewed (written by the app into this cache before each run).
+const PREVIEW = "tc-preview";
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  if (new URL(req.url).pathname.includes("/__preview__/")) {
+    event.respondWith(
+      caches.open(PREVIEW)
+        .then((cache) => cache.match(req, { ignoreSearch: true }))
+        .then((hit) => hit || new Response("Not found in the project: " + decodeURIComponent(new URL(req.url).pathname.split("/__preview__/")[1] || ""), { status: 404, headers: { "Content-Type": "text/plain" } }))
+    );
+    return;
+  }
   if (req.mode === "navigate") {
     event.respondWith(caches.match("./", { ignoreSearch: true }).then((hit) => hit || fetch(req)));
     return;

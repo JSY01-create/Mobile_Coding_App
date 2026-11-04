@@ -26,6 +26,13 @@ travel further. Turn on shift first to select text instead.
   comment toggle, find and replace, and a button to hide the keys.
 - Pinch the code to zoom.
 
+## Run your code
+
+Tap the green play button at the top. An HTML page opens in a
+live preview with a console under it (errors, console.log, and
+a command line), and Inspect shows the page's elements, styles
+and network. JavaScript and Python files run too.
+
 ## Suggestions and shortcuts
 
 Suggestions appear as you type. Tap one, or press tab or return.
